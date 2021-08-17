@@ -3,7 +3,6 @@
 #include <sourcemod>
 #include <basecomm>
 #include <connect>
-#include <a2sqcache>
 #include <utilshelper>
 
 #pragma semicolon 1
