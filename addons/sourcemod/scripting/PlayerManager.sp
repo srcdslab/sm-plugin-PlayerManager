@@ -2,8 +2,8 @@
 #include <ProxyKiller>
 #include <sourcemod>
 #include <basecomm>
-#include <connect>
 #include <utilshelper>
+#tryinclude <connect>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -12,6 +12,8 @@
 
 /* CONVARS */
 ConVar g_hCvar_BlockVPN;
+
+#if defined _Connect_Included
 ConVar g_hCvar_BlockSpoof;
 ConVar g_hCvar_BlockAdmin;
 ConVar g_hCvar_BlockVoice;
@@ -23,6 +25,7 @@ Handle g_hDatabase = null;
 char g_cPlayerGUID[MAXPLAYERS + 1][40];
 
 bool g_bSQLite = true;
+#endif
 
 enum BlockVPN
 {
@@ -48,10 +51,11 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
 {
+#if defined _Connect_Included
 	CreateNative("PM_IsPlayerSteam", Native_IsPlayerSteam);
 	CreateNative("PM_GetPlayerType", Native_GetPlayerType);
 	CreateNative("PM_GetPlayerGUID", Native_GetPlayerGUID);
-
+#endif
 	RegPluginLibrary("PlayerManager");
 	return APLRes_Success;
 }
@@ -60,10 +64,14 @@ public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 
+#if defined _Connect_Included
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "2", "3 = block steam, 2 = block nosteam, 1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 3.0);
 	g_hCvar_BlockSpoof = CreateConVar("sm_manager_block_spoof", "1", "Kick unauthenticated people that join with known steamids.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockAdmin = CreateConVar("sm_manager_block_admin", "1", "Block unauthenticated people from being admin", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockVoice = CreateConVar("sm_manager_block_voice", "1", "Block unauthenticated people from voice chat", FCVAR_NONE, true, 0.0, true, 1.0);
+#endif
+
+	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
 	RegAdminCmd("sm_auth", Command_GetAuth, ADMFLAG_GENERIC, "Retrieves the Steam ID of a player");
@@ -71,6 +79,7 @@ public void OnPluginStart()
 	AutoExecConfig(true);
 }
 
+#if defined _Connect_Included
 public void OnConfigsExecuted()
 {
 	if(!g_hCvar_BlockSpoof.BoolValue)
@@ -87,8 +96,8 @@ public void OnConfigsExecuted()
 
 public void OnClientAuthorized(int client, const char[] sAuthID)
 {
-	if (!g_hCvar_BlockSpoof.BoolValue || !g_hDatabase
-	|| IsFakeClient(client) || IsClientSourceTV(client)
+	if (!g_hCvar_BlockSpoof.BoolValue
+	|| !g_hDatabase || IsFakeClient(client) || IsClientSourceTV(client)
 	|| !SteamClientGotValidateAuthTicketResponse(sAuthID))
 		return;
 
@@ -112,7 +121,8 @@ public void OnClientAuthorized(int client, const char[] sAuthID)
 
 public Action OnClientPreAdminCheck(int client)
 {
-	if(!g_hCvar_BlockAdmin.BoolValue || IsFakeClient(client) || IsClientSourceTV(client))
+	if(!g_hCvar_BlockAdmin.BoolValue
+	|| IsFakeClient(client) || IsClientSourceTV(client))
 		return Plugin_Continue;
 
 	char sAuthID[32];
@@ -130,7 +140,8 @@ public Action OnClientPreAdminCheck(int client)
 
 public void OnClientPostAdminCheck(int client)
 {
-	if (!g_hCvar_BlockVoice.BoolValue || IsFakeClient(client) || IsClientSourceTV(client))
+	if (!g_hCvar_BlockVoice.BoolValue
+	|| IsFakeClient(client) || IsClientSourceTV(client))
 		return;
 
 	char sAuthID[32];
@@ -143,6 +154,7 @@ public void OnClientPostAdminCheck(int client)
 		return;
 	}
 }
+
 
 public void OnValidateAuthTicketResponse(EAuthSessionResponse eAuthSessionResponse, bool bGotValidateAuthTicketResponse, bool bSteamLegal, char sSteam32ID[32])
 {
@@ -162,6 +174,7 @@ public void OnValidateAuthTicketResponse(EAuthSessionResponse eAuthSessionRespon
 		}
 	}
 }
+#endif
 
 public Action ProxyKiller_DoCheckClient(int client)
 {
@@ -171,6 +184,7 @@ public Action ProxyKiller_DoCheckClient(int client)
 	if (g_hCvar_BlockVPN.IntValue == view_as<int>(vpn_Everyone))
 		return Plugin_Continue;
 
+#if defined _Connect_Included
 	char sAuthID[32];
 	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
 
@@ -191,6 +205,7 @@ public Action ProxyKiller_DoCheckClient(int client)
 	{
 		LogError("Validate auth ticket response not received for steam id %s", sAuthID);
 	}
+#endif
 	return Plugin_Handled;
 }
 
@@ -237,6 +252,7 @@ public Action Command_SteamID(int client, int args)
 	return Plugin_Handled;
 }
 
+#if defined _Connect_Included
 stock void OnSQLConnected(Handle hParent, Handle hChild, const char[] err, any data)
 {
 	if (hChild == null)
@@ -567,3 +583,4 @@ public int Native_GetPlayerGUID(Handle hPlugin, int numParams)
 
 	return !SetNativeString(2, g_cPlayerGUID[client], length + 1);
 }
+#endif
