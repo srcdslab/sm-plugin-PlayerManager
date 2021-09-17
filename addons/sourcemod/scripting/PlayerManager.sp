@@ -17,6 +17,7 @@ ConVar g_hCvar_BlockVPN;
 ConVar g_hCvar_BlockSpoof;
 ConVar g_hCvar_BlockAdmin;
 ConVar g_hCvar_BlockVoice;
+ConVar g_hCvar_Log;
 
 /* DATABASE */
 Handle g_hDatabase = null;
@@ -71,6 +72,7 @@ public void OnPluginStart()
 	g_hCvar_BlockVoice = CreateConVar("sm_manager_block_voice", "1", "Block unauthenticated people from voice chat", FCVAR_NONE, true, 0.0, true, 1.0);
 #endif
 
+	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
@@ -201,9 +203,9 @@ public Action ProxyKiller_DoCheckClient(int client)
 				return Plugin_Continue;
 		}
 	}
-	else
+	else if (g_hCvar_Log.BoolValue)
 	{
-		LogError("Validate auth ticket response not received for steam id %s", sAuthID);
+		LogMessage("ProxyKiller: Validate auth ticket response not received for client %L", client);
 	}
 #endif
 	return Plugin_Handled;
