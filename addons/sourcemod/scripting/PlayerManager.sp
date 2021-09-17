@@ -160,7 +160,8 @@ public void OnClientPostAdminCheck(int client)
 
 public void OnValidateAuthTicketResponse(EAuthSessionResponse eAuthSessionResponse, bool bGotValidateAuthTicketResponse, bool bSteamLegal, char sSteam32ID[32])
 {
-	LogMessage("OnValidateAuthTicketResponse: Response(%d), GotValidate(%d), Legal(%d), SteamID(%s)", eAuthSessionResponse, bGotValidateAuthTicketResponse, bSteamLegal, sSteam32ID);
+	if (g_hCvar_Log.BoolValue)
+		LogMessage("OnValidateAuthTicketResponse: Response(%d), GotValidate(%d), Legal(%d), SteamID(%s)", eAuthSessionResponse, bGotValidateAuthTicketResponse, bSteamLegal, sSteam32ID);
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
