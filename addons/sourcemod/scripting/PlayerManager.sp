@@ -514,36 +514,6 @@ public void APIWebResponse(const char[] sData, int client)
 //  888   Y8888  d8888888888     888       888      Y888P    888       Y88b  d88P
 //  888    Y888 d88P     888     888     8888888     Y8P     8888888888 "Y8888P"
 
-public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
-{
-	int client = GetNativeCell(1);
-
-	if (client < 1 || client > MaxClients)
-	{
-		return ThrowNativeError(SP_ERROR_NATIVE, "Client index %d is invalid", client);
-	}
-	else if (!IsClientConnected(client))
-	{
-		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is not connected", client);
-	}
-	else if (IsFakeClient(client))
-	{
-		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is a bot", client);
-	}
-
-#if defined _Connect_Included
-	char sAuthID[32];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-
-	if (SteamClientAuthenticated(sAuthID))
-		return 1;
-#else
-	return 1;
-#endif
-
-	return 0;
-}
-
 public int Native_GetPlayerType(Handle hPlugin, int numParams)
 {
 	int client = GetNativeCell(1);
@@ -592,3 +562,33 @@ public int Native_GetPlayerGUID(Handle hPlugin, int numParams)
 	return !SetNativeString(2, g_cPlayerGUID[client], length + 1);
 }
 #endif
+
+public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
+{
+	int client = GetNativeCell(1);
+
+	if (client < 1 || client > MaxClients)
+	{
+		return ThrowNativeError(SP_ERROR_NATIVE, "Client index %d is invalid", client);
+	}
+	else if (!IsClientConnected(client))
+	{
+		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is not connected", client);
+	}
+	else if (IsFakeClient(client))
+	{
+		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is a bot", client);
+	}
+
+#if defined _Connect_Included
+	char sAuthID[32];
+	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
+
+	if (SteamClientAuthenticated(sAuthID))
+		return 1;
+#else
+	return 1;
+#endif
+
+	return 0;
+}
