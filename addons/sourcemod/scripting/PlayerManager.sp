@@ -11,13 +11,13 @@
 #define DATABASE_NAME					"player_manager"
 
 /* CONVARS */
+ConVar g_hCvar_Log;
 ConVar g_hCvar_BlockVPN;
 
 #if defined _Connect_Included
 ConVar g_hCvar_BlockSpoof;
 ConVar g_hCvar_BlockAdmin;
 ConVar g_hCvar_BlockVoice;
-ConVar g_hCvar_Log;
 
 /* DATABASE */
 Handle g_hDatabase = null;
@@ -586,9 +586,9 @@ public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
 
 	if (SteamClientAuthenticated(sAuthID))
 		return 1;
+
+	return 0;
 #else
 	return 1;
 #endif
-
-	return 0;
 }
