@@ -52,8 +52,8 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
 {
-#if defined _Connect_Included
 	CreateNative("PM_IsPlayerSteam", Native_IsPlayerSteam);
+#if defined _Connect_Included
 	CreateNative("PM_GetPlayerType", Native_GetPlayerType);
 	CreateNative("PM_GetPlayerGUID", Native_GetPlayerGUID);
 #endif
@@ -70,10 +70,11 @@ public void OnPluginStart()
 	g_hCvar_BlockSpoof = CreateConVar("sm_manager_block_spoof", "1", "Kick unauthenticated people that join with known steamids.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockAdmin = CreateConVar("sm_manager_block_admin", "1", "Block unauthenticated people from being admin", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockVoice = CreateConVar("sm_manager_block_voice", "1", "Block unauthenticated people from voice chat", FCVAR_NONE, true, 0.0, true, 1.0);
+#else
+	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 #endif
 
 	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
-	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
 	RegAdminCmd("sm_auth", Command_GetAuth, ADMFLAG_GENERIC, "Retrieves the Steam ID of a player");
@@ -530,11 +531,15 @@ public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
 		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is a bot", client);
 	}
 
+#if defined _Connect_Included
 	char sAuthID[32];
 	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
 
 	if (SteamClientAuthenticated(sAuthID))
 		return 1;
+#else
+	return 1;
+#endif
 
 	return 0;
 }
