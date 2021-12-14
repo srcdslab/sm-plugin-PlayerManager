@@ -1,4 +1,4 @@
-#include <SteamWorks>
+#include <ripext>
 #include <ProxyKiller>
 #include <sourcemod>
 #include <basecomm>
@@ -435,58 +435,41 @@ stock void LogPotentialSpoofer(int client)
 	GetSteamAPIKey(sSteamAPIKey, sizeof(sSteamAPIKey));
 
 	static char sRequest[256];
-	FormatEx(sRequest, sizeof(sRequest), "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=%s&steamids=%s&format=vdf", sSteamAPIKey, sSteam64ID);
+	FormatEx(sRequest, sizeof(sRequest), "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=%s&steamids=%s&format=json", sSteamAPIKey, sSteam64ID);
 
-	Handle hRequest = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, sRequest);
-	if (!hRequest ||
-		!SteamWorks_SetHTTPRequestContextValue(hRequest, client) ||
-		!SteamWorks_SetHTTPCallbacks(hRequest, OnTransferComplete) ||
-		!SteamWorks_SendHTTPRequest(hRequest))
-	{
-		CloseHandle(hRequest);
-	}
+	HTTPRequest request = new HTTPRequest(sRequest);
+
+	request.Get(OnPlayerSummaryReceived, client);
 }
 
-public int OnTransferComplete(Handle hRequest, bool bFailure, bool bRequestSuccessful, EHTTPStatusCode eStatusCode, int client)
+void OnPlayerSummaryReceived(HTTPResponse response, any client)
 {
-	if (bFailure || !bRequestSuccessful || eStatusCode != k_EHTTPStatusCode200OK)
-	{
-		// Private profile or maybe steam down?
-		CloseHandle(hRequest);
+	if (response.Status != HTTPStatus_OK)
 		return;
-	}
 
-	int Length;
-	SteamWorks_GetHTTPResponseBodySize(hRequest, Length);
+	// Indicate that the response contains a JSON object
+	JSONObject responseData = view_as<JSONObject>(response.Data);
 
-	char[] sData = new char[Length];
-	SteamWorks_GetHTTPResponseBodyData(hRequest, sData, Length);
+	JSONObject responseJSON = view_as<JSONObject>(responseData.Get("response"));
 
-	CloseHandle(hRequest);
-
-	APIWebResponse(sData, client);
+	APIWebResponse(responseJSON, client);
 }
 
-public void APIWebResponse(const char[] sData, int client)
+public void APIWebResponse(JSONObject responseJSON, int client)
 {
-	KeyValues Response = new KeyValues("SteamAPIResponse");
-	if(!Response.ImportFromString(sData, "SteamAPIResponse"))
+	// No friends or private profile
+	if (!responseJSON.Size)
 	{
-		LogError("ImportFromString(sData, \"SteamAPIResponse\") failed.");
-		delete Response;
+		delete responseJSON;
 		return;
 	}
 
-	if(!Response.JumpToKey("players"))
-	{
-		LogError("JumpToKey(\"players\") failed.");
-		delete Response;
-		return;
-	}
+	JSONArray players = view_as<JSONArray>(responseJSON.Get("players"));
 
-	if(!Response.GotoFirstSubKey())
+	if (!players.Length)
 	{
-		delete Response;
+		delete players;
+		delete responseJSON;
 		return;
 	}
 
@@ -502,7 +485,8 @@ public void APIWebResponse(const char[] sData, int client)
 		}
 	}
 
-	delete Response;
+	delete players;
+	delete responseJSON;
 }
 
 //  888b    888        d8888 88888888888 8888888 888     888 8888888888 .d8888b.
