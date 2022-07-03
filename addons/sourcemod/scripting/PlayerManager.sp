@@ -287,6 +287,7 @@ stock Action SQLSetNames(Handle timer)
 {
 	if (!g_bSQLite)
 		SQL_TQuery(g_hDatabase, OnSqlSetNames, "SET NAMES \"UTF8\"");
+	return Plugin_Stop;
 }
 
 stock void OnSqlSetNames(Handle hParent, Handle hChild, const char[] err, any data)
