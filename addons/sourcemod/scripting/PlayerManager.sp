@@ -3,6 +3,7 @@
 #include <sourcemod>
 #include <basecomm>
 #include <utilshelper>
+#include <multicolors>
 #tryinclude <connect>
 
 #pragma semicolon 1
@@ -47,7 +48,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.0"
+	version      = "2.2.1"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -227,7 +228,7 @@ public Action Command_GetAuth(int client, int args)
 {
 	if(args < 1)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_auth <#userid|name>");
+		CReplyToCommand(client, "{green}[SM] {default}Usage: sm_auth <#userid|name>");
 		return Plugin_Handled;
 	}
 
@@ -241,17 +242,23 @@ public Action Command_GetAuth(int client, int args)
 	char sAuthID[32];
 	GetClientAuthId(iTarget, AuthId_Steam2, sAuthID, sizeof(sAuthID));
 
-	ReplyToCommand(client, "[SM] Steam ID for player %N is:\x07CBC7FF %s", iTarget, sAuthID);
+	CReplyToCommand(client, "{green}[SM] {default}Steam ID for player {olive}%N {default}is: {blue}%s", iTarget, sAuthID);
 
 	return Plugin_Handled;
 }
 
 public Action Command_SteamID(int client, int args)
-{      
+{
+	if (client < 1 || client > MaxClients)
+	{
+		ReplyToCommand(client, "[SM] Can't run this command from server console");
+		return Plugin_Handled;
+	}
+
 	char sAuthID[64];
 	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID));
 
-	ReplyToCommand(client, "[SM] %N, your Steam ID is:\x07CBC7FF %s", client, sAuthID);
+	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam ID is: {blue}%s", client, sAuthID);
 
 	return Plugin_Handled;
 }
