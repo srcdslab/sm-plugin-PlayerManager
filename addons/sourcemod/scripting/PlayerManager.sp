@@ -15,6 +15,8 @@
 ConVar g_hCvar_Log;
 ConVar g_hCvar_BlockVPN;
 
+char sAuthID32[MAXPLAYERS + 1][64];
+
 #if defined _Connect_Included
 ConVar g_hCvar_BlockSpoof;
 ConVar g_hCvar_BlockAdmin;
@@ -46,9 +48,9 @@ enum ConnectionType
 public Plugin myinfo =
 {
 	name         = "PlayerManager",
-	author       = "zaCade, Neon, maxime1907",
+	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.1"
+	version      = "2.2.2"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -81,6 +83,18 @@ public void OnPluginStart()
 	RegAdminCmd("sm_auth", Command_GetAuth, ADMFLAG_GENERIC, "Retrieves the Steam ID of a player");
 
 	AutoExecConfig(true);
+}
+
+public void OnClientPutInServer(int client)
+{
+	char sSteamID[64];
+	GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID), false);
+	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "%s", sSteamID);
+}
+
+public void OnClientDisconnect(int client)
+{
+	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "");
 }
 
 #if defined _Connect_Included
@@ -129,10 +143,7 @@ public Action OnClientPreAdminCheck(int client)
 	|| IsFakeClient(client) || IsClientSourceTV(client))
 		return Plugin_Continue;
 
-	char sAuthID[32];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-
-	if (SteamClientGotValidateAuthTicketResponse(sAuthID) && !SteamClientAuthenticated(sAuthID))
+	if (SteamClientGotValidateAuthTicketResponse(sAuthID32[client]) && !SteamClientAuthenticated(sAuthID32[client]))
 	{
 		LogMessage("%L was not authenticated with steam, denying admin.", client);
 		NotifyPostAdminCheck(client);
@@ -148,10 +159,7 @@ public void OnClientPostAdminCheck(int client)
 	|| IsFakeClient(client) || IsClientSourceTV(client))
 		return;
 
-	char sAuthID[32];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-
-	if(SteamClientGotValidateAuthTicketResponse(sAuthID) && !SteamClientAuthenticated(sAuthID))
+	if(SteamClientGotValidateAuthTicketResponse(sAuthID32[client]) && !SteamClientAuthenticated(sAuthID32[client]))
 	{
 		LogMessage("%L was not authenticated with steam, muting client.", client);
 		BaseComm_SetClientMute(client, true);
@@ -169,9 +177,7 @@ public void OnValidateAuthTicketResponse(EAuthSessionResponse eAuthSessionRespon
 	{
 		if (IsClientConnected(i))
 		{
-			char sAuthID[32];
-			GetClientAuthId(i, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-			if (StrEqual(sAuthID, sSteam32ID, false))
+			if (StrEqual(sAuthID32[i], sSteam32ID, false))
 			{
 				LogPotentialSpoofer(i);
 				break;
@@ -190,12 +196,9 @@ public Action ProxyKiller_DoCheckClient(int client)
 		return Plugin_Continue;
 
 #if defined _Connect_Included
-	char sAuthID[32];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-
-	if (SteamClientGotValidateAuthTicketResponse(sAuthID))
+	if (SteamClientGotValidateAuthTicketResponse(sAuthID32[client]))
 	{
-		if (SteamClientAuthenticated(sAuthID))
+		if (SteamClientAuthenticated(sAuthID32[client]))
 		{
 			if (g_hCvar_BlockVPN.IntValue == view_as<int>(vpn_Steam))
 				return Plugin_Continue;
@@ -239,10 +242,7 @@ public Action Command_GetAuth(int client, int args)
 	if ((iTarget = FindTarget(client, sTarget, false, false)) <= 0)
 		return Plugin_Handled;
 
-	char sAuthID[32];
-	GetClientAuthId(iTarget, AuthId_Steam2, sAuthID, sizeof(sAuthID));
-
-	CReplyToCommand(client, "{green}[SM] {default}Steam ID for player {olive}%N {default}is: {blue}%s", iTarget, sAuthID);
+	CReplyToCommand(client, "{green}[SM] {default}Steam ID for player {olive}%N {default}is: {blue}%s", iTarget, sAuthID32[iTarget]);
 
 	return Plugin_Handled;
 }
@@ -255,10 +255,7 @@ public Action Command_SteamID(int client, int args)
 		return Plugin_Handled;
 	}
 
-	char sAuthID[64];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID));
-
-	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam ID is: {blue}%s", client, sAuthID);
+	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam ID is: {blue}%s", client, sAuthID32[client]);
 
 	return Plugin_Handled;
 }
@@ -433,11 +430,8 @@ stock void LogPotentialSpoofer(int client)
 	if (IsFakeClient(client) || !IsClientConnected(client))
 		return;
 
-	char sAuthID[32];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-
 	char sSteam64ID[32];
-	Steam32IDtoSteam64ID(sAuthID, sSteam64ID, sizeof(sSteam64ID));
+	Steam32IDtoSteam64ID(sAuthID32[client], sSteam64ID, sizeof(sSteam64ID));
 
 	char sSteamAPIKey[64];
 	GetSteamAPIKey(sSteamAPIKey, sizeof(sSteamAPIKey));
@@ -483,13 +477,9 @@ public void APIWebResponse(JSONObject responseJSON, int client)
 
 	if (IsClientConnected(client))
 	{
-		char sSteamID[32];
-
-		GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID));
-
-		if (!SteamClientAuthenticated(sSteamID))
+		if (!SteamClientAuthenticated(sAuthID32[client]))
 		{
-			LogMessage("Potential spoofer %N %s", client, sSteamID);
+			LogMessage("Potential spoofer %N %s", client, sAuthID32[client]);
 		}
 	}
 
@@ -523,10 +513,7 @@ public int Native_GetPlayerType(Handle hPlugin, int numParams)
 		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is a bot", client);
 	}
 
-	char sAuthID[32];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-
-	if(SteamClientAuthenticated(sAuthID))
+	if(SteamClientAuthenticated(sAuthID32[client]))
 		SetNativeCellRef(2, 1);
 
 	SetNativeCellRef(2, 0);
@@ -573,10 +560,7 @@ public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
 	}
 
 #if defined _Connect_Included
-	char sAuthID[32];
-	GetClientAuthId(client, AuthId_Steam2, sAuthID, sizeof(sAuthID), false);
-
-	if (SteamClientAuthenticated(sAuthID))
+	if (SteamClientAuthenticated(sAuthID32[client]))
 		return 1;
 
 	return 0;
