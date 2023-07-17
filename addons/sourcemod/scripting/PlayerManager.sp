@@ -16,6 +16,7 @@ ConVar g_hCvar_Log;
 ConVar g_hCvar_BlockVPN;
 
 char sAuthID32[MAXPLAYERS + 1][64];
+char sAuthID32Verified[MAXPLAYERS + 1][64];
 
 #if defined _Connect_Included
 ConVar g_hCvar_BlockSpoof;
@@ -90,11 +91,16 @@ public void OnClientPutInServer(int client)
 	char sSteamID[64];
 	GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID), false);
 	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "%s", sSteamID);
+
+	char sSteamIDVerified[64];
+	GetClientAuthId(client, AuthId_Steam2, sSteamIDVerified, sizeof(sSteamIDVerified));
+	FormatEx(sAuthID32Verified[client], sizeof(sAuthID32Verified[]), "%s", sSteamIDVerified);
 }
 
 public void OnClientDisconnect(int client)
 {
 	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "");
+	FormatEx(sAuthID32Verified[client], sizeof(sAuthID32Verified[]), "");
 }
 
 #if defined _Connect_Included
@@ -242,7 +248,7 @@ public Action Command_GetAuth(int client, int args)
 	if ((iTarget = FindTarget(client, sTarget, false, false)) <= 0)
 		return Plugin_Handled;
 
-	CReplyToCommand(client, "{green}[SM] {default}Steam ID for player {olive}%N {default}is: {blue}%s", iTarget, sAuthID32[iTarget]);
+	CReplyToCommand(client, "{green}[SM] {default}Steam ID for player {olive}%N {default}is: {blue}%s", iTarget, sAuthID32Verified[iTarget]);
 
 	return Plugin_Handled;
 }
@@ -255,7 +261,7 @@ public Action Command_SteamID(int client, int args)
 		return Plugin_Handled;
 	}
 
-	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam ID is: {blue}%s", client, sAuthID32[client]);
+	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam ID is: {blue}%s", client, sAuthID32Verified[client]);
 
 	return Plugin_Handled;
 }
@@ -477,9 +483,9 @@ public void APIWebResponse(JSONObject responseJSON, int client)
 
 	if (IsClientConnected(client))
 	{
-		if (!SteamClientAuthenticated(sAuthID32[client]))
+		if (!SteamClientAuthenticated(sAuthID32Verified[client]))
 		{
-			LogMessage("Potential spoofer %N %s", client, sAuthID32[client]);
+			LogMessage("Potential spoofer %N %s", client, sAuthID32Verified[client]);
 		}
 	}
 
