@@ -9,30 +9,35 @@ project:
       unpack:
       - source: /addons
         dest: /addons
+
     - name: multicolors
       type: git
       repo: https://github.com/srcdslab/sm-plugin-MultiColors
       unpack:
       - source: /addons
         dest: /addons
+
     - name: ext-connect
       type: git
       repo: https://github.com/srcdslab/sm-ext-connect
       unpack:
       - source: /addons
         dest: /addons
+
     - name: ext-ripext
       type: git
       repo: https://github.com/srcdslab/sm-ext-ripext
       unpack:
       - source: /pawn/scripting
         dest: /addons/sourcemod/scripting
+
     - name: proxykiller
       type: git
       repo: https://github.com/srcdslab/sm-plugin-ProxyKiller
       unpack:
       - source: /addons
         dest: /addons
+
     - name: utilshelper
       type: git
       repo: https://github.com/srcdslab/sm-plugin-utilshelper

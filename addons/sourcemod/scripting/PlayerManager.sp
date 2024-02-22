@@ -1,10 +1,16 @@
 #include <ripext>
-#include <ProxyKiller>
 #include <sourcemod>
 #include <basecomm>
 #include <utilshelper>
 #include <multicolors>
+
+#undef REQUIRE_EXTENSIONS
 #tryinclude <connect>
+#define REQUIRE_EXTENSIONS
+
+#undef REQUIRE_PLUGINS
+#tryinclude <ProxyKiller>
+#define REQUIRE_PLUGINS
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -51,7 +57,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.2"
+	version      = "2.2.3"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -120,7 +126,11 @@ public void OnConfigsExecuted()
 
 public void OnClientAuthorized(int client, const char[] sAuthID)
 {
+	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
+	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+
 	if (!g_hCvar_BlockSpoof.BoolValue
+	|| !bAuthTicket || !bAuthenticated
 	|| !g_hDatabase || IsFakeClient(client) || IsClientSourceTV(client)
 	|| !SteamClientGotValidateAuthTicketResponse(sAuthID))
 		return;
@@ -145,8 +155,10 @@ public void OnClientAuthorized(int client, const char[] sAuthID)
 
 public Action OnClientPreAdminCheck(int client)
 {
-	if(!g_hCvar_BlockAdmin.BoolValue
-	|| IsFakeClient(client) || IsClientSourceTV(client))
+	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
+	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+
+	if(!g_hCvar_BlockAdmin.BoolValue || !bAuthTicket || !bAuthenticated || IsFakeClient(client) || IsClientSourceTV(client))
 		return Plugin_Continue;
 
 	if (SteamClientGotValidateAuthTicketResponse(sAuthID32[client]) && !SteamClientAuthenticated(sAuthID32[client]))
@@ -161,8 +173,10 @@ public Action OnClientPreAdminCheck(int client)
 
 public void OnClientPostAdminCheck(int client)
 {
-	if (!g_hCvar_BlockVoice.BoolValue
-	|| IsFakeClient(client) || IsClientSourceTV(client))
+	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
+	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+
+	if (!g_hCvar_BlockVoice.BoolValue || !bAuthTicket || !bAuthenticated || IsFakeClient(client) || IsClientSourceTV(client))
 		return;
 
 	if(SteamClientGotValidateAuthTicketResponse(sAuthID32[client]) && !SteamClientAuthenticated(sAuthID32[client]))
@@ -172,7 +186,6 @@ public void OnClientPostAdminCheck(int client)
 		return;
 	}
 }
-
 
 public void OnValidateAuthTicketResponse(EAuthSessionResponse eAuthSessionResponse, bool bGotValidateAuthTicketResponse, bool bSteamLegal, char sSteam32ID[32])
 {
@@ -193,6 +206,7 @@ public void OnValidateAuthTicketResponse(EAuthSessionResponse eAuthSessionRespon
 }
 #endif
 
+#if defined _ProxyKiller_included_
 public Action ProxyKiller_DoCheckClient(int client)
 {
 	if (g_hCvar_BlockVPN.IntValue <= view_as<int>(vpn_Disable))
@@ -202,9 +216,12 @@ public Action ProxyKiller_DoCheckClient(int client)
 		return Plugin_Continue;
 
 #if defined _Connect_Included
-	if (SteamClientGotValidateAuthTicketResponse(sAuthID32[client]))
+	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
+	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+
+	if (bAuthTicket && SteamClientGotValidateAuthTicketResponse(sAuthID32[client]))
 	{
-		if (SteamClientAuthenticated(sAuthID32[client]))
+		if (bAuthenticated && SteamClientAuthenticated(sAuthID32[client]))
 		{
 			if (g_hCvar_BlockVPN.IntValue == view_as<int>(vpn_Steam))
 				return Plugin_Continue;
@@ -222,6 +239,7 @@ public Action ProxyKiller_DoCheckClient(int client)
 #endif
 	return Plugin_Handled;
 }
+#endif
 
 //   .d8888b.   .d88888b.  888b     d888 888b     d888        d8888 888b    888 8888888b.   .d8888b.
 //  d88P  Y88b d88P" "Y88b 8888b   d8888 8888b   d8888       d88888 8888b   888 888  "Y88b d88P  Y88b
@@ -481,12 +499,10 @@ public void APIWebResponse(JSONObject responseJSON, int client)
 		return;
 	}
 
-	if (IsClientConnected(client))
+	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+	if (bAuthenticated && IsClientConnected(client) && !SteamClientAuthenticated(sAuthID32Verified[client]))
 	{
-		if (!SteamClientAuthenticated(sAuthID32Verified[client]))
-		{
-			LogMessage("Potential spoofer %N %s", client, sAuthID32Verified[client]);
-		}
+		LogMessage("Potential spoofer %N %s", client, sAuthID32Verified[client]);
 	}
 
 	delete players;
@@ -519,7 +535,8 @@ public int Native_GetPlayerType(Handle hPlugin, int numParams)
 		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is a bot", client);
 	}
 
-	if(SteamClientAuthenticated(sAuthID32[client]))
+	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+	if(bAuthenticated && SteamClientAuthenticated(sAuthID32[client]))
 		SetNativeCellRef(2, 1);
 
 	SetNativeCellRef(2, 0);
@@ -566,7 +583,8 @@ public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
 	}
 
 #if defined _Connect_Included
-	if (SteamClientAuthenticated(sAuthID32[client]))
+	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
+	if (bAuthenticated && SteamClientAuthenticated(sAuthID32[client]))
 		return 1;
 
 	return 0;
