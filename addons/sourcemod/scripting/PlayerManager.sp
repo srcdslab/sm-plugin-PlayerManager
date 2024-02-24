@@ -219,9 +219,12 @@ public Action ProxyKiller_DoCheckClient(int client)
 	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
 	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
 
-	if (bAuthTicket && SteamClientGotValidateAuthTicketResponse(sAuthID32[client]))
+	if (!bAuthTicket || !bAuthenticated)
+		return Plugin_Continue;
+
+	if (SteamClientGotValidateAuthTicketResponse(sAuthID32[client]))
 	{
-		if (bAuthenticated && SteamClientAuthenticated(sAuthID32[client]))
+		if (SteamClientAuthenticated(sAuthID32[client]))
 		{
 			if (g_hCvar_BlockVPN.IntValue == view_as<int>(vpn_Steam))
 				return Plugin_Continue;
@@ -538,6 +541,8 @@ public int Native_GetPlayerType(Handle hPlugin, int numParams)
 	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
 	if(bAuthenticated && SteamClientAuthenticated(sAuthID32[client]))
 		SetNativeCellRef(2, 1);
+	else
+		SetNativeCellRef(2, 0);
 
 	SetNativeCellRef(2, 0);
 	return 1;
