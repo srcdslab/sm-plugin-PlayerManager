@@ -539,7 +539,7 @@ public int Native_GetPlayerType(Handle hPlugin, int numParams)
 	}
 
 	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-	if(bAuthenticated && SteamClientAuthenticated(sAuthID32[client]))
+	if (!bAuthenticated || (bAuthenticated && SteamClientAuthenticated(sAuthID32[client])))
 		SetNativeCellRef(2, 1);
 	else
 		SetNativeCellRef(2, 0);
@@ -589,7 +589,7 @@ public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
 
 #if defined _Connect_Included
 	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-	if (bAuthenticated && SteamClientAuthenticated(sAuthID32[client]))
+	if (!bAuthenticated || (bAuthenticated && SteamClientAuthenticated(sAuthID32[client])))
 		return 1;
 
 	return 0;
