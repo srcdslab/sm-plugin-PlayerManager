@@ -15,7 +15,10 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define DATABASE_NAME					"player_manager"
+#define DATABASE_NAME		"player_manager"
+#define DB_CHARSET			"utf8mb4"
+#define DB_COLLATION		"utf8mb4_unicode_ci"
+#define MAX_SQL_QUERY_LENGTH 1024
 
 /* CONVARS */
 ConVar g_hCvar_Log;
@@ -57,7 +60,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.3"
+	version      = "2.2.4"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -317,7 +320,11 @@ stock void OnSQLConnected(Handle hParent, Handle hChild, const char[] err, any d
 stock Action SQLSetNames(Handle timer)
 {
 	if (!g_bSQLite)
-		SQL_TQuery(g_hDatabase, OnSqlSetNames, "SET NAMES \"UTF8\"");
+	{
+		char sQuery[MAX_SQL_QUERY_LENGTH];
+		Format(sQuery, sizeof(sQuery), "SET NAMES \"%s\"", DB_CHARSET);
+		SQL_TQuery(g_hDatabase, OnSqlSetNames, sQuery);
+	}
 	return Plugin_Stop;
 }
 
@@ -332,10 +339,17 @@ stock void OnSqlSetNames(Handle hParent, Handle hChild, const char[] err, any da
 
 stock Action SQLTableCreation_Connection(Handle timer)
 {
+	char sQuery[MAX_SQL_QUERY_LENGTH];
 	if (g_bSQLite)
-		SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, "CREATE TABLE IF NOT EXISTS connection (`auth` TEXT NOT NULL, `type` INTEGER(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` INTEGER(32) NOT NULL, PRIMARY KEY (`auth`));");
+	{
+		Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS connection (`auth` TEXT NOT NULL, `type` INTEGER(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` INTEGER(32) NOT NULL, PRIMARY KEY (`auth`)) CHARACTER SET %s COLLATE %s;", DB_CHARSET, DB_COLLATION);
+		SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, sQuery);
+	}
 	else
-		SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, "CREATE TABLE IF NOT EXISTS connection (`auth` VARCHAR(32) NOT NULL, `type` INT(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`auth`));");
+	{
+		Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS connection (`auth` VARCHAR(32) NOT NULL, `type` INT(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`auth`)) CHARACTER SET %s COLLATE %s;", DB_CHARSET, DB_COLLATION);
+		SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, sQuery);
+	}
 	return Plugin_Stop;
 }
 
