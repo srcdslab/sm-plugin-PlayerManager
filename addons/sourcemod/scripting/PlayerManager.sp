@@ -266,7 +266,14 @@ public Action Command_SteamID(int client, int args)
 {
 	SetGlobalTransTarget(client);
 
-	int iTarget = GetTargetPlayer(client, args, false, true);
+	int iTarget = client;
+
+	if (args != 0)
+	{
+		char sArg[MAX_NAME_LENGTH];
+		GetCmdArg(1, sArg, sizeof(sArg));
+		iTarget = FindTarget(client, sArg, false, true);
+	}
 
 	if (iTarget < 1 || iTarget > MaxClients)
 	{
@@ -296,7 +303,14 @@ public Action Command_SteamID2(int client, int args)
 {
 	SetGlobalTransTarget(client);
 
-	int iTarget = GetTargetPlayer(client, args, false, true);
+	int iTarget = client;
+
+	if (args != 0)
+	{
+		char sArg[MAX_NAME_LENGTH];
+		GetCmdArg(1, sArg, sizeof(sArg));
+		iTarget = FindTarget(client, sArg, false, true);
+	}
 
 	if (iTarget < 1 || iTarget > MaxClients)
 	{
@@ -318,7 +332,14 @@ public Action Command_SteamID3(int client, int args)
 {
 	SetGlobalTransTarget(client);
 
-	int iTarget = GetTargetPlayer(client, args, false, true);
+	int iTarget = client;
+
+	if (args != 0)
+	{
+		char sArg[MAX_NAME_LENGTH];
+		GetCmdArg(1, sArg, sizeof(sArg));
+		iTarget = FindTarget(client, sArg, false, true);
+	}
 
 	if (iTarget < 1 || iTarget > MaxClients)
 	{
@@ -340,7 +361,14 @@ public Action Command_SteamID64(int client, int args)
 {
 	SetGlobalTransTarget(client);
 
-	int iTarget = GetTargetPlayer(client, args, false, true);
+	int iTarget = client;
+
+	if (args != 0)
+	{
+		char sArg[MAX_NAME_LENGTH];
+		GetCmdArg(1, sArg, sizeof(sArg));
+		iTarget = FindTarget(client, sArg, false, true);
+	}
 
 	if (iTarget < 1 || iTarget > MaxClients)
 	{
