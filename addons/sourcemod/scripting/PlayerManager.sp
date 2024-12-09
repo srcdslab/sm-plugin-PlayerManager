@@ -91,11 +91,8 @@ public void OnPluginStart()
 	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_AuthIdType = CreateConVar("sm_manager_authid_type", "1", "AuthID type used for sm_steamid cmd [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
 
-	RegConsoleCmd("sm_auth", Command_SteamID, "Retrieves the Steam ID of a player");
+	RegConsoleCmd("sm_auth", Command_GetAuth, "Retrieves the Steam ID of a player");
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves the Steam ID of a player");
-	RegConsoleCmd("sm_steamid2", Command_SteamID2, "Retrieves the Steam2 ID of a player");
-	RegConsoleCmd("sm_steamid3", Command_SteamID3, "Retrieves the Steam3 ID of a player");
-	RegConsoleCmd("sm_steamid64", Command_SteamID64, "Retrieves the Steam64 ID of a player");
 
 	AutoExecConfig(true);
 }
@@ -262,17 +259,32 @@ public Action ProxyKiller_DoCheckClient(int client)
 //   "Y8888P"   "Y88888P"  888       888 888       888 d88P     888 888    Y888 8888888P"   "Y8888P"
 //
 
-public Action Command_SteamID(int client, int args)
+public Action Command_GetAuth(int client, int args)
 {
 	SetGlobalTransTarget(client);
 
 	int iTarget = client;
+	int iType = g_hCvar_AuthIdType.IntValue;
+
+	if (args == 0)
+	{
+		CReplyToCommand(client, "{green}[SM] {default}Usage: {olive}sm_auth <target> <1|2|3>", client);
+		return Plugin_Handled;
+	}
 
 	if (args != 0)
 	{
 		char sArg[MAX_NAME_LENGTH];
+		char sArg2[8];
+
 		GetCmdArg(1, sArg, sizeof(sArg));
 		iTarget = FindTarget(client, sArg, false, true);
+
+		if (args == 2)
+		{
+			GetCmdArg(2, sArg2, sizeof(sArg2));
+			iType = StringToInt(sArg2);
+		}
 	}
 
 	if (iTarget < 1 || iTarget > MaxClients)
@@ -281,7 +293,8 @@ public Action Command_SteamID(int client, int args)
 		return Plugin_Handled;
 	}
 
-	AuthIdType authType = view_as<AuthIdType>(g_hCvar_AuthIdType.IntValue);
+	AuthIdType authType = view_as<AuthIdType>(iType);
+
 	char sAuthID[64];
 	GetClientAuthId(iTarget, authType, sAuthID, sizeof(sAuthID));
 
@@ -298,90 +311,20 @@ public Action Command_SteamID(int client, int args)
 
 	return Plugin_Handled;
 }
-
-public Action Command_SteamID2(int client, int args)
+public Action Command_SteamID(int client, int args)
 {
-	SetGlobalTransTarget(client);
+	AuthIdType authType = view_as<AuthIdType>(g_hCvar_AuthIdType.IntValue);
 
-	int iTarget = client;
+	char sAuthID[64];
+	GetClientAuthId(client, authType, sAuthID, sizeof(sAuthID));
 
-	if (args != 0)
-	{
-		char sArg[MAX_NAME_LENGTH];
-		GetCmdArg(1, sArg, sizeof(sArg));
-		iTarget = FindTarget(client, sArg, false, true);
-	}
+	char sBuffer[64] = "Steam(2)";
+	if (authType == AuthId_Steam3)
+		sBuffer = "Steam(3)";
+	else if (authType == AuthId_SteamID64)
+		sBuffer = "Steam(64)";
 
-	if (iTarget < 1 || iTarget > MaxClients)
-	{
-		CReplyToCommand(client, "{green}[SM] {default}%t", "Player no longer available");
-		return Plugin_Handled;
-	}
-
-	char sSteamID2[64];
-	GetClientAuthId(client, AuthId_Steam2, sSteamID2, sizeof(sSteamID2), false);
-	if (iTarget == client)
-		CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam(2) ID is: {blue}%s", client, sSteamID2);
-	else
-		CReplyToCommand(client, "{green}[SM] {default}Steam(2) ID for player {olive}%N {default}is: {blue}%s", iTarget, sSteamID2);
-
-	return Plugin_Handled;
-}
-
-public Action Command_SteamID3(int client, int args)
-{
-	SetGlobalTransTarget(client);
-
-	int iTarget = client;
-
-	if (args != 0)
-	{
-		char sArg[MAX_NAME_LENGTH];
-		GetCmdArg(1, sArg, sizeof(sArg));
-		iTarget = FindTarget(client, sArg, false, true);
-	}
-
-	if (iTarget < 1 || iTarget > MaxClients)
-	{
-		CReplyToCommand(client, "{green}[SM] {default}%t", "Player no longer available");
-		return Plugin_Handled;
-	}
-
-	char sSteamID3[64];
-	GetClientAuthId(client, AuthId_Steam3, sSteamID3, sizeof(sSteamID3), false);
-	if (iTarget == client)
-		CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam(3) ID is: {blue}%s", client, sSteamID3);
-	else
-		CReplyToCommand(client, "{green}[SM] {default}Steam(3) ID for player {olive}%N {default}is: {blue}%s", iTarget, sSteamID3);
-
-	return Plugin_Handled;
-}
-
-public Action Command_SteamID64(int client, int args)
-{
-	SetGlobalTransTarget(client);
-
-	int iTarget = client;
-
-	if (args != 0)
-	{
-		char sArg[MAX_NAME_LENGTH];
-		GetCmdArg(1, sArg, sizeof(sArg));
-		iTarget = FindTarget(client, sArg, false, true);
-	}
-
-	if (iTarget < 1 || iTarget > MaxClients)
-	{
-		CReplyToCommand(client, "{green}[SM] {default}%t", "Player no longer available");
-		return Plugin_Handled;
-	}
-
-	char sSteamID64[64];
-	GetClientAuthId(client, AuthId_SteamID64, sSteamID64, sizeof(sSteamID64), false);
-	if (iTarget == client)
-		CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam(64) ID is: {blue}%s", client, sSteamID64);
-	else
-		CReplyToCommand(client, "{green}[SM] {default}Steam(64) ID for player {olive}%N {default}is: {blue}%s", iTarget, sSteamID64);
+	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your %s ID is: {blue}%s", client, sBuffer, sAuthID);
 
 	return Plugin_Handled;
 }
