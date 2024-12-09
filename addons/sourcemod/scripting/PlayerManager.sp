@@ -261,16 +261,16 @@ public Action ProxyKiller_DoCheckClient(int client)
 
 public Action Command_GetAuth(int client, int args)
 {
-	SetGlobalTransTarget(client);
-
 	int iTarget = client;
 	int iType = g_hCvar_AuthIdType.IntValue;
 
 	if (args == 0)
 	{
-		CReplyToCommand(client, "{green}[SM] {default}Usage: {olive}sm_auth <target> <1|2|3>", client);
+		CReplyToCommand(client, "{green}[SM] {default}Usage: {olive}sm_auth <target> <1|2|3>");
 		return Plugin_Handled;
 	}
+
+	SetGlobalTransTarget(client);
 
 	if (args != 0)
 	{
