@@ -91,8 +91,8 @@ public void OnPluginStart()
 	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_AuthIdType = CreateConVar("sm_manager_authid_type", "1", "AuthID type used for sm_steamid cmd [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
 
+	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
 	RegConsoleCmd("sm_auth", Command_GetAuth, "Retrieves the Steam ID of a player");
-	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves the Steam ID of a player");
 
 	AutoExecConfig(true);
 }
