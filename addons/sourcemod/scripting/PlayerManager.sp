@@ -266,7 +266,7 @@ public Action Command_GetAuth(int client, int args)
 
 	if (args == 0)
 	{
-		CReplyToCommand(client, "{green}[SM] {default}Usage: {olive}sm_auth <target> <1|2|3>");
+		CReplyToCommand(client, "{green}[SM] {default}Usage: {olive}sm_auth <target> <0|1|2|3>");
 		return Plugin_Handled;
 	}
 
@@ -293,16 +293,9 @@ public Action Command_GetAuth(int client, int args)
 		return Plugin_Handled;
 	}
 
-	AuthIdType authType = view_as<AuthIdType>(iType);
-
 	char sAuthID[64];
-	GetClientAuthId(iTarget, authType, sAuthID, sizeof(sAuthID));
-
-	char sBuffer[64] = "Steam(2)";
-	if (authType == AuthId_Steam3)
-		sBuffer = "Steam(3)";
-	else if (authType == AuthId_SteamID64)
-		sBuffer = "Steam(64)";
+	char sBuffer[64];
+	GetFormattedAuthId(iTarget, view_as<AuthIdType>(iType), sAuthID, sizeof(sAuthID), sBuffer, sizeof(sBuffer));
 
 	if (iTarget == client)
 		CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your %s ID is: {blue}%s", client, sBuffer, sAuthID);
@@ -313,20 +306,29 @@ public Action Command_GetAuth(int client, int args)
 }
 public Action Command_SteamID(int client, int args)
 {
-	AuthIdType authType = view_as<AuthIdType>(g_hCvar_AuthIdType.IntValue);
-
 	char sAuthID[64];
-	GetClientAuthId(client, authType, sAuthID, sizeof(sAuthID));
-
-	char sBuffer[64] = "Steam(2)";
-	if (authType == AuthId_Steam3)
-		sBuffer = "Steam(3)";
-	else if (authType == AuthId_SteamID64)
-		sBuffer = "Steam(64)";
+	char sBuffer[64];
+	GetFormattedAuthId(client, view_as<AuthIdType>(g_hCvar_AuthIdType.IntValue), sAuthID, sizeof(sAuthID), sBuffer, sizeof(sBuffer));
 
 	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your %s ID is: {blue}%s", client, sBuffer, sAuthID);
 
 	return Plugin_Handled;
+}
+
+stock void GetFormattedAuthId(int client, AuthIdType authType, char[] sAuthID, int maxlen, char[] sBufferType, int typeMaxLen)
+{
+	GetClientAuthId(client, authType, sAuthID, maxlen);
+	switch(authType)
+	{
+		case AuthId_Engine:
+			strcopy(sBufferType, typeMaxLen, "Steam(Engine)");
+		case AuthId_Steam3:
+			strcopy(sBufferType, typeMaxLen, "Steam(3)");
+		case AuthId_SteamID64:
+			strcopy(sBufferType, typeMaxLen, "Steam(64)");
+		default:
+			strcopy(sBufferType, typeMaxLen, "Steam(2)");
+	}
 }
 
 #if defined _Connect_Included
