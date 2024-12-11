@@ -23,6 +23,7 @@
 /* CONVARS */
 ConVar g_hCvar_Log;
 ConVar g_hCvar_BlockVPN;
+ConVar g_hCvar_AuthIdType;
 
 char sAuthID32[MAXPLAYERS + 1][64];
 char sAuthID32Verified[MAXPLAYERS + 1][64];
@@ -60,7 +61,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.4"
+	version      = "2.2.5"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -88,9 +89,10 @@ public void OnPluginStart()
 #endif
 
 	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_hCvar_AuthIdType = CreateConVar("sm_manager_authid_type", "1", "AuthID type used for sm_steamid cmd [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
 
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
-	RegAdminCmd("sm_auth", Command_GetAuth, ADMFLAG_GENERIC, "Retrieves the Steam ID of a player");
+	RegConsoleCmd("sm_auth", Command_GetAuth, "Retrieves the Steam ID of a player");
 
 	AutoExecConfig(true);
 }
@@ -259,35 +261,74 @@ public Action ProxyKiller_DoCheckClient(int client)
 
 public Action Command_GetAuth(int client, int args)
 {
-	if(args < 1)
+	int iTarget = client;
+	int iType = g_hCvar_AuthIdType.IntValue;
+
+	if (args == 0)
 	{
-		CReplyToCommand(client, "{green}[SM] {default}Usage: sm_auth <#userid|name>");
+		CReplyToCommand(client, "{green}[SM] {default}Usage: {olive}sm_auth <target> <0|1|2|3>");
 		return Plugin_Handled;
 	}
 
-	char sTarget[MAX_TARGET_LENGTH];
-	GetCmdArg(1, sTarget, sizeof(sTarget));
+	SetGlobalTransTarget(client);
 
-	int iTarget;
-	if ((iTarget = FindTarget(client, sTarget, false, false)) <= 0)
+	if (args != 0)
+	{
+		char sArg[MAX_NAME_LENGTH];
+		char sArg2[8];
+
+		GetCmdArg(1, sArg, sizeof(sArg));
+		iTarget = FindTarget(client, sArg, false, true);
+
+		if (args == 2)
+		{
+			GetCmdArg(2, sArg2, sizeof(sArg2));
+			iType = StringToInt(sArg2);
+		}
+	}
+
+	if (iTarget < 1 || iTarget > MaxClients)
+	{
+		CReplyToCommand(client, "{green}[SM] {default}%t", "Player no longer available");
 		return Plugin_Handled;
+	}
 
-	CReplyToCommand(client, "{green}[SM] {default}Steam ID for player {olive}%N {default}is: {blue}%s", iTarget, sAuthID32Verified[iTarget]);
+	char sAuthID[64];
+	char sBuffer[64];
+	GetFormattedAuthId(iTarget, view_as<AuthIdType>(iType), sAuthID, sizeof(sAuthID), sBuffer, sizeof(sBuffer));
+
+	if (iTarget == client)
+		CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your %s ID is: {blue}%s", client, sBuffer, sAuthID);
+	else
+		CReplyToCommand(client, "{green}[SM] {default}%s ID for player {olive}%N {default}is: {blue}%s", sBuffer, iTarget, sAuthID);
+
+	return Plugin_Handled;
+}
+public Action Command_SteamID(int client, int args)
+{
+	char sAuthID[64];
+	char sBuffer[64];
+	GetFormattedAuthId(client, view_as<AuthIdType>(g_hCvar_AuthIdType.IntValue), sAuthID, sizeof(sAuthID), sBuffer, sizeof(sBuffer));
+
+	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your %s ID is: {blue}%s", client, sBuffer, sAuthID);
 
 	return Plugin_Handled;
 }
 
-public Action Command_SteamID(int client, int args)
+stock void GetFormattedAuthId(int client, AuthIdType authType, char[] sAuthID, int maxlen, char[] sBufferType, int typeMaxLen)
 {
-	if (client < 1 || client > MaxClients)
+	GetClientAuthId(client, authType, sAuthID, maxlen);
+	switch(authType)
 	{
-		ReplyToCommand(client, "[SM] Can't run this command from server console");
-		return Plugin_Handled;
+		case AuthId_Engine:
+			strcopy(sBufferType, typeMaxLen, "Steam(Engine)");
+		case AuthId_Steam3:
+			strcopy(sBufferType, typeMaxLen, "Steam(3)");
+		case AuthId_SteamID64:
+			strcopy(sBufferType, typeMaxLen, "Steam(64)");
+		default:
+			strcopy(sBufferType, typeMaxLen, "Steam(2)");
 	}
-
-	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your Steam ID is: {blue}%s", client, sAuthID32Verified[client]);
-
-	return Plugin_Handled;
 }
 
 #if defined _Connect_Included
@@ -341,15 +382,11 @@ stock Action SQLTableCreation_Connection(Handle timer)
 {
 	char sQuery[MAX_SQL_QUERY_LENGTH];
 	if (g_bSQLite)
-	{
 		Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS connection (`auth` TEXT NOT NULL, `type` INTEGER(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` INTEGER(32) NOT NULL, PRIMARY KEY (`auth`)) CHARACTER SET %s COLLATE %s;", DB_CHARSET, DB_COLLATION);
-		SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, sQuery);
-	}
 	else
-	{
 		Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS connection (`auth` VARCHAR(32) NOT NULL, `type` INT(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`auth`)) CHARACTER SET %s COLLATE %s;", DB_CHARSET, DB_COLLATION);
-		SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, sQuery);
-	}
+
+	SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, sQuery);
 	return Plugin_Stop;
 }
 
