@@ -4,6 +4,27 @@
 
 #define _PlayerManager_included
 
+#define PlayerManager_V_MAJOR   2
+#define PlayerManager_V_MINOR   3
+#define PlayerManager_V_PATCH   0
+
+#define PlayerManager_VERSION   "2.3.0"
+
+/**
+ * Called when the plugin becomes available.
+ * 
+ * @noreturn
+ */
+forward void PM_OnPluginOK();
+
+/**
+ * Called when the plugin becomes unavailable.
+ * This can happen when the plugin is reloaded or unloaded.
+ * 
+ * @noreturn
+ */
+forward void PM_OnPluginNotOK();
+
 /**
  * Check if clients usertype is legit.
  *

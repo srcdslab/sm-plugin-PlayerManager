@@ -1,6 +1,7 @@
 #include <ripext>
 #include <sourcemod>
 #include <basecomm>
+#include <PlayerManager>
 #include <utilshelper>
 #include <multicolors>
 
@@ -19,6 +20,9 @@
 #define DB_CHARSET			"utf8mb4"
 #define DB_COLLATION		"utf8mb4_unicode_ci"
 #define MAX_SQL_QUERY_LENGTH 1024
+
+GlobalForward g_hForward_StatusOK;
+GlobalForward g_hForward_StatusNotOK;
 
 /* CONVARS */
 ConVar g_hCvar_Log;
@@ -61,7 +65,8 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.5"
+	version      = PlayerManager_VERSION,
+	url          = "https://github.com/srcdslab/sm-plugin-PlayerManager"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -71,6 +76,10 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int erro
 	CreateNative("PM_GetPlayerType", Native_GetPlayerType);
 	CreateNative("PM_GetPlayerGUID", Native_GetPlayerGUID);
 #endif
+
+	g_hForward_StatusOK = CreateGlobalForward("PM_OnPluginOK", ET_Ignore);
+	g_hForward_StatusNotOK = CreateGlobalForward("PM_OnPluginNotOK", ET_Ignore);
+
 	RegPluginLibrary("PlayerManager");
 	return APLRes_Success;
 }
@@ -95,6 +104,24 @@ public void OnPluginStart()
 	RegConsoleCmd("sm_auth", Command_GetAuth, "Retrieves the Steam ID of a player");
 
 	AutoExecConfig(true);
+}
+
+public void OnAllPluginsLoaded()
+{
+	SendForward_Available();
+}
+
+public void OnPluginPauseChange(bool pause)
+{
+	if (pause)
+		SendForward_NotAvailable();
+	else
+		SendForward_Available();
+}
+
+public void OnPluginEnd()
+{
+	SendForward_NotAvailable();
 }
 
 public void OnClientPutInServer(int client)
@@ -647,4 +674,16 @@ public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
 #else
 	return 1;
 #endif
+}
+
+stock void SendForward_Available()
+{
+	Call_StartForward(g_hForward_StatusOK);
+	Call_Finish();
+}
+
+stock void SendForward_NotAvailable()
+{
+	Call_StartForward(g_hForward_StatusNotOK);
+	Call_Finish();
 }
