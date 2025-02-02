@@ -21,7 +21,6 @@
 #define MAX_SQL_QUERY_LENGTH 1024
 
 /* CONVARS */
-ConVar g_hCvar_Log;
 ConVar g_hCvar_BlockVPN;
 ConVar g_hCvar_AuthIdType;
 
@@ -29,6 +28,7 @@ char sAuthID32[MAXPLAYERS + 1][64];
 char sAuthID32Verified[MAXPLAYERS + 1][64];
 
 #if defined _connect_included
+ConVar g_hCvar_Log;
 ConVar g_hCvar_BlockSpoof;
 ConVar g_hCvar_BlockAdmin;
 ConVar g_hCvar_BlockVoice;
@@ -93,17 +93,19 @@ public void OnPluginStart()
 	g_hCvar_BlockVoice = CreateConVar("sm_manager_block_voice", "1", "Block unauthenticated people from voice chat", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_AuthSessionResponseLegal = CreateConVar("sm_manager_auth_session_response_legal", "0,3,4,5,9", "List of EAuthSessionResponse that are considered as Steam legal (Defined in steam_api_interop.cs).");
 	g_hCvar_AuthAntiSpoof = CreateConVar("sm_manager_auth_antispoof", "1", "0 = Disable, 1 = Prevent steam users to be spoofed by nosteamers, 2 = 1 + reject incoming same nosteam id");
+	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
 #else
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 #endif
 
-	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_AuthIdType = CreateConVar("sm_manager_authid_type", "1", "AuthID type used for sm_steamid cmd [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
 
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
 	RegConsoleCmd("sm_auth", Command_GetAuth, "Retrieves the Steam ID of a player");
 
+	#if defined _connect_included
 	RegAdminCmd("sm_authlist", Command_GetAuthList, ADMFLAG_GENERIC, "List auth id buffer list");
+	#endif
 
 	AutoExecConfig(true);
 }
@@ -121,6 +123,7 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
+	#if defined _connect_included
 	if (!IsFakeClient(client) && !IsClientSourceTV(client))
 	{
 		int index = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), sAuthID32[client]);
@@ -133,6 +136,7 @@ public void OnClientDisconnect(int client)
 		else
 			LogError("%L was not found in auth session response array", client);
 	}
+	#endif
 
 	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "");
 	FormatEx(sAuthID32Verified[client], sizeof(sAuthID32Verified[]), "");
@@ -359,6 +363,7 @@ public Action ProxyKiller_DoCheckClient(int client)
 //   "Y8888P"   "Y88888P"  888       888 888       888 d88P     888 888    Y888 8888888P"   "Y8888P"
 //
 
+#if defined _connect_included
 public Action Command_GetAuthList(int client, int args)
 {
 	for (int index = 0; index < sizeof(g_sAuthSessionReponseValidated[]); index++)
@@ -370,6 +375,7 @@ public Action Command_GetAuthList(int client, int args)
 	}
 	return Plugin_Handled;
 }
+#endif
 
 public Action Command_GetAuth(int client, int args)
 {
