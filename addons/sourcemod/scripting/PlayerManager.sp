@@ -8,9 +8,9 @@
 #tryinclude <connect>
 #define REQUIRE_EXTENSIONS
 
-#undef REQUIRE_PLUGINS
+#undef REQUIRE_PLUGIN
 #tryinclude <ProxyKiller>
-#define REQUIRE_PLUGINS
+#define REQUIRE_PLUGIN
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -28,16 +28,22 @@ ConVar g_hCvar_AuthIdType;
 char sAuthID32[MAXPLAYERS + 1][64];
 char sAuthID32Verified[MAXPLAYERS + 1][64];
 
-#if defined _Connect_Included
+#if defined _connect_included
 ConVar g_hCvar_BlockSpoof;
 ConVar g_hCvar_BlockAdmin;
 ConVar g_hCvar_BlockVoice;
+ConVar g_hCvar_AuthSessionResponseLegal;
 
 /* DATABASE */
 Handle g_hDatabase = null;
 
+#define MAX_STEAMID_BUFFER 1024
+
 /* STRING */
 char g_cPlayerGUID[MAXPLAYERS + 1][40];
+char g_sAuthSessionReponseValidated[MAX_STEAMID_BUFFER][64];
+EAuthSessionResponse g_eAuthSessionResponse[MAX_STEAMID_BUFFER] = { k_EAuthSessionResponseUserNotConnectedToSteam, ... };
+bool g_bSteamLegal[MAX_STEAMID_BUFFER] = { false, ... };
 
 bool g_bSQLite = true;
 #endif
@@ -67,7 +73,7 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
 {
 	CreateNative("PM_IsPlayerSteam", Native_IsPlayerSteam);
-#if defined _Connect_Included
+#if defined _connect_included
 	CreateNative("PM_GetPlayerType", Native_GetPlayerType);
 	CreateNative("PM_GetPlayerGUID", Native_GetPlayerGUID);
 #endif
@@ -79,11 +85,12 @@ public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 
-#if defined _Connect_Included
+#if defined _connect_included
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "2", "3 = block steam, 2 = block nosteam, 1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 3.0);
 	g_hCvar_BlockSpoof = CreateConVar("sm_manager_block_spoof", "1", "Kick unauthenticated people that join with known steamids.", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockAdmin = CreateConVar("sm_manager_block_admin", "1", "Block unauthenticated people from being admin", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockVoice = CreateConVar("sm_manager_block_voice", "1", "Block unauthenticated people from voice chat", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_hCvar_AuthSessionResponseLegal = CreateConVar("sm_manager_auth_session_response_legal", "0,3,4,5,9", "List of EAuthSessionResponse that are considered as Steam legal (Defined in steam_api_interop.cs).");
 #else
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 #endif
@@ -93,6 +100,8 @@ public void OnPluginStart()
 
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
 	RegConsoleCmd("sm_auth", Command_GetAuth, "Retrieves the Steam ID of a player");
+
+	RegAdminCmd("sm_authlist", Command_GetAuthList, ADMFLAG_GENERIC, "List auth id buffer list");
 
 	AutoExecConfig(true);
 }
@@ -110,11 +119,24 @@ public void OnClientPutInServer(int client)
 
 public void OnClientDisconnect(int client)
 {
+	if (!IsFakeClient(client) && !IsClientSourceTV(client))
+	{
+		int index = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), sAuthID32[client]);
+		if (index != -1)
+		{
+			g_sAuthSessionReponseValidated[index] = "\0";
+			g_eAuthSessionResponse[index] = k_EAuthSessionResponseUserNotConnectedToSteam;
+			g_bSteamLegal[index] = false;
+		}
+		else
+			LogError("%L was not found in auth session response array", client);
+	}
+
 	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "");
 	FormatEx(sAuthID32Verified[client], sizeof(sAuthID32Verified[]), "");
 }
 
-#if defined _Connect_Included
+#if defined _connect_included
 public void OnConfigsExecuted()
 {
 	if(!g_hCvar_BlockSpoof.BoolValue)
@@ -131,11 +153,7 @@ public void OnConfigsExecuted()
 
 public void OnClientAuthorized(int client, const char[] sAuthID)
 {
-	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
-	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-
 	if (!g_hCvar_BlockSpoof.BoolValue
-	|| !bAuthTicket || !bAuthenticated
 	|| !g_hDatabase || IsFakeClient(client) || IsClientSourceTV(client)
 	|| !SteamClientGotValidateAuthTicketResponse(sAuthID))
 		return;
@@ -160,10 +178,7 @@ public void OnClientAuthorized(int client, const char[] sAuthID)
 
 public Action OnClientPreAdminCheck(int client)
 {
-	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
-	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-
-	if(!g_hCvar_BlockAdmin.BoolValue || !bAuthTicket || !bAuthenticated || IsFakeClient(client) || IsClientSourceTV(client))
+	if(!g_hCvar_BlockAdmin.BoolValue || IsFakeClient(client) || IsClientSourceTV(client))
 		return Plugin_Continue;
 
 	if (SteamClientGotValidateAuthTicketResponse(sAuthID32[client]) && !SteamClientAuthenticated(sAuthID32[client]))
@@ -178,10 +193,7 @@ public Action OnClientPreAdminCheck(int client)
 
 public void OnClientPostAdminCheck(int client)
 {
-	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
-	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-
-	if (!g_hCvar_BlockVoice.BoolValue || !bAuthTicket || !bAuthenticated || IsFakeClient(client) || IsClientSourceTV(client))
+	if (!g_hCvar_BlockVoice.BoolValue || IsFakeClient(client) || IsClientSourceTV(client))
 		return;
 
 	if(SteamClientGotValidateAuthTicketResponse(sAuthID32[client]) && !SteamClientAuthenticated(sAuthID32[client]))
@@ -192,22 +204,78 @@ public void OnClientPostAdminCheck(int client)
 	}
 }
 
-public void OnValidateAuthTicketResponse(EAuthSessionResponse eAuthSessionResponse, bool bGotValidateAuthTicketResponse, bool bSteamLegal, char sSteam32ID[32])
+public EAuthSessionResponse OnValidateAuthTicketResponse(const char[] steamID, EAuthSessionResponse eAuthSessionResponse)
 {
+	int client = 0;
+	while (client < sizeof(g_sAuthSessionReponseValidated))
+	{
+		if (g_sAuthSessionReponseValidated[client][0] == '\0')
+			break;
+		client++;
+	}
+	strcopy(g_sAuthSessionReponseValidated[client], sizeof(g_sAuthSessionReponseValidated[]), steamID);
+	g_eAuthSessionResponse[client] = eAuthSessionResponse;
+	g_bSteamLegal[client] = IsAuthSessionResponseSteamLegal(eAuthSessionResponse);
+
 	if (g_hCvar_Log.BoolValue)
-		LogMessage("OnValidateAuthTicketResponse: Response(%d), GotValidate(%d), Legal(%d), SteamID(%s)", eAuthSessionResponse, bGotValidateAuthTicketResponse, bSteamLegal, sSteam32ID);
+		LogMessage("OnValidateAuthTicketResponse[%s]: response(%d), legal(%d)", steamID, eAuthSessionResponse, g_bSteamLegal[client]);
 
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsClientConnected(i))
 		{
-			if (StrEqual(sAuthID32[i], sSteam32ID, false))
+			if (StrEqual(sAuthID32[i], steamID, false))
 			{
 				LogPotentialSpoofer(i);
 				break;
 			}
 		}
 	}
+
+	return g_bSteamLegal[client] ? k_EAuthSessionResponseOK : eAuthSessionResponse;
+}
+
+bool IsAuthSessionResponseSteamLegal(EAuthSessionResponse eAuthSessionResponse)
+{
+	char authString[128];
+	g_hCvar_AuthSessionResponseLegal.GetString(authString, sizeof(authString));
+
+	char legalAuthSessionResponse[10][128];
+	int legalAuthSessionResponseCount = ExplodeString(authString, ",", legalAuthSessionResponse, sizeof(legalAuthSessionResponse), sizeof(legalAuthSessionResponse[]));
+
+	for (int i = 0; i < legalAuthSessionResponseCount; i++)
+	{
+		EAuthSessionResponse eLegalAuthSessionResponse = view_as<EAuthSessionResponse>(StringToInt(legalAuthSessionResponse[i]));
+		if (eAuthSessionResponse == eLegalAuthSessionResponse)
+			return true;
+	}
+
+	return false;
+}
+
+
+bool SteamClientAuthenticated(const char[] steamID)
+{
+	int client = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), steamID);
+	return client != -1 ? g_bSteamLegal[client]: false;
+}
+
+bool SteamClientGotValidateAuthTicketResponse(const char[] steamID)
+{
+	return FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), steamID) != -1;
+}
+
+int FindStringInList(const char[][] array, int arraySize, const char[] searchString)
+{
+	for (int i = 0; i < arraySize; i++)
+	{
+		if (StrEqual(array[i], searchString))
+		{
+			return i;
+		}
+	}
+
+	return -1;
 }
 #endif
 
@@ -220,13 +288,7 @@ public Action ProxyKiller_DoCheckClient(int client)
 	if (g_hCvar_BlockVPN.IntValue == view_as<int>(vpn_Everyone))
 		return Plugin_Continue;
 
-#if defined _Connect_Included
-	bool bAuthTicket = GetFeatureStatus(FeatureType_Native, "SteamClientGotValidateAuthTicketResponse") == FeatureStatus_Available;
-	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-
-	if (!bAuthTicket || !bAuthenticated)
-		return Plugin_Continue;
-
+#if defined _connect_included
 	if (SteamClientGotValidateAuthTicketResponse(sAuthID32[client]))
 	{
 		if (SteamClientAuthenticated(sAuthID32[client]))
@@ -258,6 +320,18 @@ public Action ProxyKiller_DoCheckClient(int client)
 //  Y88b  d88P Y88b. .d88P 888   "   888 888   "   888  d8888888888 888   Y8888 888  .d88P Y88b  d88P
 //   "Y8888P"   "Y88888P"  888       888 888       888 d88P     888 888    Y888 8888888P"   "Y8888P"
 //
+
+public Action Command_GetAuthList(int client, int args)
+{
+	for (int index = 0; index < sizeof(g_sAuthSessionReponseValidated[]); index++)
+	{
+		if (g_sAuthSessionReponseValidated[index][0] != '\0')
+		{
+			CReplyToCommand(client, "Client[%s]: response(%d), legal(%d)", g_sAuthSessionReponseValidated[index], g_eAuthSessionResponse[index], g_bSteamLegal[index]);
+		}
+	}
+	return Plugin_Handled;
+}
 
 public Action Command_GetAuth(int client, int args)
 {
@@ -331,7 +405,7 @@ stock void GetFormattedAuthId(int client, AuthIdType authType, char[] sAuthID, i
 	}
 }
 
-#if defined _Connect_Included
+#if defined _connect_included
 stock void OnSQLConnected(Handle hParent, Handle hChild, const char[] err, any data)
 {
 	if (hChild == null)
@@ -553,8 +627,7 @@ public void APIWebResponse(JSONObject responseJSON, int client)
 		return;
 	}
 
-	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-	if (bAuthenticated && IsClientConnected(client) && !SteamClientAuthenticated(sAuthID32Verified[client]))
+	if (IsClientConnected(client) && !SteamClientAuthenticated(sAuthID32Verified[client]))
 	{
 		LogMessage("Potential spoofer %N %s", client, sAuthID32Verified[client]);
 	}
@@ -589,8 +662,7 @@ public int Native_GetPlayerType(Handle hPlugin, int numParams)
 		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is a bot", client);
 	}
 
-	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-	if (!bAuthenticated || (bAuthenticated && SteamClientAuthenticated(sAuthID32[client])))
+	if (SteamClientAuthenticated(sAuthID32[client]))
 		SetNativeCellRef(2, 1);
 	else
 		SetNativeCellRef(2, 0);
@@ -638,9 +710,8 @@ public int Native_IsPlayerSteam(Handle hPlugin, int numParams)
 		return ThrowNativeError(SP_ERROR_NATIVE, "Client %d is a bot", client);
 	}
 
-#if defined _Connect_Included
-	bool bAuthenticated = GetFeatureStatus(FeatureType_Native, "SteamClientAuthenticated") == FeatureStatus_Available;
-	if (!bAuthenticated || (bAuthenticated && SteamClientAuthenticated(sAuthID32[client])))
+#if defined _connect_included
+	if (SteamClientAuthenticated(sAuthID32[client]))
 		return 1;
 
 	return 0;

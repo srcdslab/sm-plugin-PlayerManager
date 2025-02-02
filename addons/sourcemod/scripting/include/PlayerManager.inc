@@ -49,10 +49,10 @@ public SharedPlugin __pl_PlayerManager =
 };
 
 #if !defined REQUIRE_PLUGIN
-	public void __pl_PlayerManager_SetNTVOptional()
-	{
-		MarkNativeAsOptional("PM_IsPlayerSteam");
-		MarkNativeAsOptional("PM_GetPlayerType");
-		MarkNativeAsOptional("PM_GetPlayerGUID");
-	}
+public void __pl_PlayerManager_SetNTVOptional()
+{
+	MarkNativeAsOptional("PM_IsPlayerSteam");
+	MarkNativeAsOptional("PM_GetPlayerType");
+	MarkNativeAsOptional("PM_GetPlayerGUID");
+}
 #endif
