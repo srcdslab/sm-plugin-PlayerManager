@@ -33,6 +33,7 @@ ConVar g_hCvar_BlockSpoof;
 ConVar g_hCvar_BlockAdmin;
 ConVar g_hCvar_BlockVoice;
 ConVar g_hCvar_AuthSessionResponseLegal;
+ConVar g_hCvar_AuthAntiSpoof;
 
 /* DATABASE */
 Handle g_hDatabase = null;
@@ -91,6 +92,7 @@ public void OnPluginStart()
 	g_hCvar_BlockAdmin = CreateConVar("sm_manager_block_admin", "1", "Block unauthenticated people from being admin", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_BlockVoice = CreateConVar("sm_manager_block_voice", "1", "Block unauthenticated people from voice chat", FCVAR_NONE, true, 0.0, true, 1.0);
 	g_hCvar_AuthSessionResponseLegal = CreateConVar("sm_manager_auth_session_response_legal", "0,3,4,5,9", "List of EAuthSessionResponse that are considered as Steam legal (Defined in steam_api_interop.cs).");
+	g_hCvar_AuthAntiSpoof = CreateConVar("sm_manager_auth_antispoof", "1", "0 = Disable, 1 = Prevent steam users to be spoofed by nosteamers, 2 = 1 + reject incoming same nosteam id");
 #else
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 #endif
@@ -204,8 +206,59 @@ public void OnClientPostAdminCheck(int client)
 	}
 }
 
+bool IsClientSpoofing(const char[] steamID, bool bSteamLegal)
+{
+	int client = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), steamID);
+	if (client == -1)
+		return false;
+
+	int connectedclient = -1;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientConnected(i))
+		{
+			if (StrEqual(sAuthID32[i], steamID, false))
+			{
+				connectedclient = i;
+				break;
+			}
+		}
+	}
+
+	// Incoming NoSteam player trying to spoof steam player
+	if (!bSteamLegal && g_bSteamLegal[client])
+	{
+		if (connectedclient != -1)
+			LogPotentialSpoofer(connectedclient);
+		return true;
+	}
+	else if (
+		// Incoming steam player currently spoofed by NoSteamer
+		(bSteamLegal && !g_bSteamLegal[client])
+		// Incoming NoSteam player trying to spoof NoSteam player
+		|| (g_hCvar_AuthAntiSpoof.IntValue == 2 && !bSteamLegal && !g_bSteamLegal[client])
+	)
+	{
+		if (connectedclient != -1)
+		{
+			LogPotentialSpoofer(connectedclient);
+			KickClientEx(connectedclient, "Same Steam ID connected.");
+		}
+		return false;
+	}
+	return false;
+}
+
 public EAuthSessionResponse OnValidateAuthTicketResponse(const char[] steamID, EAuthSessionResponse eAuthSessionResponse)
 {
+	bool bSteamLegal = IsAuthSessionResponseSteamLegal(eAuthSessionResponse);
+
+	if (g_hCvar_Log.BoolValue)
+		LogMessage("OnValidateAuthTicketResponse[%s]: response(%d), legal(%d)", steamID, eAuthSessionResponse, bSteamLegal);
+
+	if (IsClientSpoofing(steamID, bSteamLegal))
+		return k_EAuthSessionResponseLoggedInElseWhere;
+
 	int client = 0;
 	while (client < sizeof(g_sAuthSessionReponseValidated))
 	{
@@ -215,22 +268,7 @@ public EAuthSessionResponse OnValidateAuthTicketResponse(const char[] steamID, E
 	}
 	strcopy(g_sAuthSessionReponseValidated[client], sizeof(g_sAuthSessionReponseValidated[]), steamID);
 	g_eAuthSessionResponse[client] = eAuthSessionResponse;
-	g_bSteamLegal[client] = IsAuthSessionResponseSteamLegal(eAuthSessionResponse);
-
-	if (g_hCvar_Log.BoolValue)
-		LogMessage("OnValidateAuthTicketResponse[%s]: response(%d), legal(%d)", steamID, eAuthSessionResponse, g_bSteamLegal[client]);
-
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (IsClientConnected(i))
-		{
-			if (StrEqual(sAuthID32[i], steamID, false))
-			{
-				LogPotentialSpoofer(i);
-				break;
-			}
-		}
-	}
+	g_bSteamLegal[client] = bSteamLegal;
 
 	return g_bSteamLegal[client] ? k_EAuthSessionResponseOK : eAuthSessionResponse;
 }
