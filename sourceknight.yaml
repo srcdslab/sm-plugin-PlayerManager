@@ -20,7 +20,6 @@ project:
     - name: ext-connect
       type: git
       repo: https://github.com/srcdslab/sm-ext-connect
-      version: origin/master
       unpack:
       - source: /connect.inc
         dest: /addons/sourcemod/scripting/include/connect.inc
