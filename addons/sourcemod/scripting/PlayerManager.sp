@@ -42,6 +42,7 @@ Handle g_hDatabase = null;
 
 /* STRING */
 char g_cPlayerGUID[MAXPLAYERS + 1][40];
+char g_sBeginAuthSessionFailed[MAX_STEAMID_BUFFER][64];
 char g_sAuthSessionReponseValidated[MAX_STEAMID_BUFFER][64];
 EAuthSessionResponse g_eAuthSessionResponse[MAX_STEAMID_BUFFER] = { k_EAuthSessionResponseUserNotConnectedToSteam, ... };
 bool g_bSteamLegal[MAX_STEAMID_BUFFER] = { false, ... };
@@ -126,7 +127,11 @@ public void OnClientDisconnect(int client)
 	#if defined _connect_included
 	if (!IsFakeClient(client) && !IsClientSourceTV(client))
 	{
-		int index = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), sAuthID32[client]);
+		int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), sAuthID32[client]);
+		if (index != -1)
+			g_sBeginAuthSessionFailed[index] = "\0";
+
+		index = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), sAuthID32[client]);
 		if (index != -1)
 		{
 			g_sAuthSessionReponseValidated[index] = "\0";
@@ -253,6 +258,51 @@ bool IsClientSpoofing(const char[] steamID, bool bSteamLegal)
 	return false;
 }
 
+public EBeginAuthSessionResult OnBeginAuthSessionResult(const char[] steamID, EBeginAuthSessionResult eBeginAuthSessionResult)
+{
+	if (g_hCvar_Log.BoolValue)
+		LogMessage("OnBeginAuthSessionResult[%s]: result(%d)", steamID, eBeginAuthSessionResult);
+
+	if (eBeginAuthSessionResult == k_EBeginAuthSessionResultInvalidTicket)
+	{
+		int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), steamID);
+		if (index != -1)
+		{
+			LogError("Duplicate begin auth session entry for %s", steamID);
+		}
+		else
+		{
+			int client = 0;
+			while (client < sizeof(g_sBeginAuthSessionFailed))
+			{
+				if (g_sBeginAuthSessionFailed[client][0] == '\0')
+					break;
+				client++;
+			}
+			if (client >= sizeof(g_sBeginAuthSessionFailed))
+				LogError("Buffer g_sBeginAuthSessionFailed is full");
+			else
+				strcopy(g_sBeginAuthSessionFailed[client], sizeof(g_sBeginAuthSessionFailed[]), steamID);
+			return k_EBeginAuthSessionResultOK;
+		}
+	}
+	return eBeginAuthSessionResult;
+}
+
+public void OnClientConnected(int client)
+{
+	char sSteamID[64];
+	GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID), false);
+
+	int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), sSteamID);
+	if (index != -1)
+	{
+		char sSteamID64[128];
+		GetClientAuthId(client, AuthId_SteamID64, sSteamID64, sizeof(sSteamID64), false);
+		ValidateAuthTicketResponse(sSteamID64, k_EAuthSessionResponseAuthTicketInvalid, sSteamID64);
+	}
+}
+
 public EAuthSessionResponse OnValidateAuthTicketResponse(const char[] steamID, EAuthSessionResponse eAuthSessionResponse)
 {
 	bool bSteamLegal = IsAuthSessionResponseSteamLegal(eAuthSessionResponse);
@@ -270,11 +320,16 @@ public EAuthSessionResponse OnValidateAuthTicketResponse(const char[] steamID, E
 			break;
 		client++;
 	}
-	strcopy(g_sAuthSessionReponseValidated[client], sizeof(g_sAuthSessionReponseValidated[]), steamID);
-	g_eAuthSessionResponse[client] = eAuthSessionResponse;
-	g_bSteamLegal[client] = bSteamLegal;
+	if (client >= sizeof(g_sAuthSessionReponseValidated))
+		LogError("Buffer g_sAuthSessionReponseValidated is full");
+	else
+	{
+		strcopy(g_sAuthSessionReponseValidated[client], sizeof(g_sAuthSessionReponseValidated[]), steamID);
+		g_eAuthSessionResponse[client] = eAuthSessionResponse;
+		g_bSteamLegal[client] = bSteamLegal;
+	}
 
-	return g_bSteamLegal[client] ? k_EAuthSessionResponseOK : eAuthSessionResponse;
+	return bSteamLegal ? k_EAuthSessionResponseOK : eAuthSessionResponse;
 }
 
 bool IsAuthSessionResponseSteamLegal(EAuthSessionResponse eAuthSessionResponse)
@@ -294,7 +349,6 @@ bool IsAuthSessionResponseSteamLegal(EAuthSessionResponse eAuthSessionResponse)
 
 	return false;
 }
-
 
 bool SteamClientAuthenticated(const char[] steamID)
 {
