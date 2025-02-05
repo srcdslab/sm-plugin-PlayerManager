@@ -24,6 +24,8 @@
 ConVar g_hCvar_BlockVPN;
 ConVar g_hCvar_AuthIdType;
 
+bool g_bLate = false;
+
 char sAuthID32[MAXPLAYERS + 1][64];
 char sAuthID32Verified[MAXPLAYERS + 1][64];
 
@@ -69,7 +71,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.5"
+	version      = "2.2.6"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -80,6 +82,8 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int erro
 	CreateNative("PM_GetPlayerGUID", Native_GetPlayerGUID);
 #endif
 	RegPluginLibrary("PlayerManager");
+
+	g_bLate = bLate;
 	return APLRes_Success;
 }
 
@@ -109,17 +113,16 @@ public void OnPluginStart()
 	#endif
 
 	AutoExecConfig(true);
-}
 
-public void OnClientPutInServer(int client)
-{
-	char sSteamID[64];
-	GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID), false);
-	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "%s", sSteamID);
-
-	char sSteamIDVerified[64];
-	GetClientAuthId(client, AuthId_Steam2, sSteamIDVerified, sizeof(sSteamIDVerified));
-	FormatEx(sAuthID32Verified[client], sizeof(sAuthID32Verified[]), "%s", sSteamIDVerified);
+	if (g_bLate)
+	{
+		char sSteam32ID[32];
+		for (int i = 1; i < MaxClients; i++)
+		{
+			if (IsClientInGame(i) && !IsFakeClient(i) && IsClientAuthorized(i) && GetClientAuthId(i, AuthId_Steam2, sSteam32ID, sizeof(sSteam32ID)))
+				OnClientAuthorized(i, sSteam32ID);
+		}
+	}
 }
 
 public void OnClientDisconnect(int client)
@@ -161,9 +164,17 @@ public void OnConfigsExecuted()
 	else
 		SetFailState("Could not find \"%s\" entry in databases.cfg.", DATABASE_NAME);
 }
+#endif
 
 public void OnClientAuthorized(int client, const char[] sAuthID)
 {
+	char sSteamIDVerified[64];
+	GetClientAuthId(client, AuthId_Steam2, sSteamIDVerified, sizeof(sSteamIDVerified));
+
+	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "%s", sAuthID);
+	FormatEx(sAuthID32Verified[client], sizeof(sAuthID32Verified[]), "%s", sSteamIDVerified);
+
+#if defined _connect_included
 	if (!g_hCvar_BlockSpoof.BoolValue
 	|| !g_hDatabase || IsFakeClient(client) || IsClientSourceTV(client)
 	|| !SteamClientGotValidateAuthTicketResponse(sAuthID))
@@ -185,8 +196,10 @@ public void OnClientAuthorized(int client, const char[] sAuthID)
 	pack.WriteCell(iConnectionType);
 
 	SQLSelect_Connection(INVALID_HANDLE, pack);
+#endif
 }
 
+#if defined _connect_included
 public Action OnClientPreAdminCheck(int client)
 {
 	if(!g_hCvar_BlockAdmin.BoolValue || IsFakeClient(client) || IsClientSourceTV(client))
