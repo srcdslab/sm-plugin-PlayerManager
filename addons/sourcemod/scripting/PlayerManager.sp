@@ -45,6 +45,7 @@ Handle g_hDatabase = null;
 /* STRING */
 char g_cPlayerGUID[MAXPLAYERS + 1][40];
 char g_sBeginAuthSessionFailed[MAX_STEAMID_BUFFER][64];
+bool g_sBeginAuthSessionFailedDuplicate[MAX_STEAMID_BUFFER] = { false, ... };
 char g_sAuthSessionReponseValidated[MAX_STEAMID_BUFFER][64];
 EAuthSessionResponse g_eAuthSessionResponse[MAX_STEAMID_BUFFER] = { k_EAuthSessionResponseUserNotConnectedToSteam, ... };
 bool g_bSteamLegal[MAX_STEAMID_BUFFER] = { false, ... };
@@ -71,7 +72,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.6"
+	version      = "2.2.7"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -132,7 +133,12 @@ public void OnClientDisconnect(int client)
 	{
 		int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), sAuthID32[client]);
 		if (index != -1)
+		{
+			if (g_hCvar_Log.BoolValue)
+				LogMessage("OnClientDisconnect g_sBeginAuthSessionFailed[%d][%s]: duplicate(%d)", index, g_sBeginAuthSessionFailed[index], g_sBeginAuthSessionFailedDuplicate[index]);
 			g_sBeginAuthSessionFailed[index] = "\0";
+			g_sBeginAuthSessionFailedDuplicate[index] = false;
+		}
 
 		index = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), sAuthID32[client]);
 		if (index != -1)
@@ -142,7 +148,7 @@ public void OnClientDisconnect(int client)
 			g_bSteamLegal[index] = false;
 		}
 		else
-			LogError("%L was not found in auth session response array", client);
+			LogMessage("%L was not found in auth session response array", client);
 	}
 	#endif
 
@@ -171,7 +177,6 @@ public void OnClientAuthorized(int client, const char[] sAuthID)
 	char sSteamIDVerified[64];
 	GetClientAuthId(client, AuthId_Steam2, sSteamIDVerified, sizeof(sSteamIDVerified));
 
-	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "%s", sAuthID);
 	FormatEx(sAuthID32Verified[client], sizeof(sAuthID32Verified[]), "%s", sSteamIDVerified);
 
 #if defined _connect_included
@@ -228,47 +233,39 @@ public void OnClientPostAdminCheck(int client)
 	}
 }
 
-bool IsClientSpoofing(const char[] steamID, bool bSteamLegal)
+int GetSpooferClient(const char[] steamID)
 {
-	int client = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), steamID);
-	if (client == -1)
-		return false;
-
 	int connectedclient = -1;
 	for (int i = 1; i <= MaxClients; i++)
 	{
 		if (IsClientConnected(i))
 		{
-			if (StrEqual(sAuthID32[i], steamID, false))
+			char sSteamID[64];
+			GetClientAuthId(i, AuthId_Steam2, sSteamID, sizeof(sSteamID), false);
+			if (StrEqual(sSteamID, steamID, false))
 			{
 				connectedclient = i;
 				break;
 			}
 		}
 	}
+	return connectedclient;
+}
 
-	// Incoming NoSteam player trying to spoof steam player
-	if (!bSteamLegal && g_bSteamLegal[client])
-	{
-		if (connectedclient != -1)
-			LogPotentialSpoofer(connectedclient);
-		return true;
-	}
-	else if (
-		// Incoming steam player currently spoofed by NoSteamer
-		(bSteamLegal && !g_bSteamLegal[client])
-		// Incoming NoSteam player trying to spoof NoSteam player
-		|| (g_hCvar_AuthAntiSpoof.IntValue == 2 && !bSteamLegal && !g_bSteamLegal[client])
-	)
-	{
-		if (connectedclient != -1)
-		{
-			LogPotentialSpoofer(connectedclient);
-			KickClientEx(connectedclient, "Same Steam ID connected.");
-		}
+bool IsIncomingClientSpoofing(const char[] steamID, bool bSteamLegal)
+{
+	int client = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), steamID);
+	if (client == -1)
 		return false;
-	}
-	return false;
+
+	return (
+		// Incoming steam player trying to spoof NoSteamer
+		(bSteamLegal && !g_bSteamLegal[client] && g_hCvar_AuthAntiSpoof.IntValue < 1)
+		// Incoming NoSteam player trying to spoof steam player
+		|| (!bSteamLegal && g_bSteamLegal[client] && g_hCvar_AuthAntiSpoof.IntValue >= 1)
+		// Incoming NoSteam player trying to spoof NoSteam player
+		|| (g_hCvar_AuthAntiSpoof.IntValue >= 2 && !bSteamLegal && !g_bSteamLegal[client])
+	);
 }
 
 public EBeginAuthSessionResult OnBeginAuthSessionResult(const char[] steamID, EBeginAuthSessionResult eBeginAuthSessionResult)
@@ -281,7 +278,8 @@ public EBeginAuthSessionResult OnBeginAuthSessionResult(const char[] steamID, EB
 		int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), steamID);
 		if (index != -1)
 		{
-			LogError("Duplicate begin auth session entry for %s", steamID);
+			LogMessage("Duplicate begin auth session entry for %s", steamID);
+			g_sBeginAuthSessionFailedDuplicate[index] = true;
 		}
 		else
 		{
@@ -296,16 +294,53 @@ public EBeginAuthSessionResult OnBeginAuthSessionResult(const char[] steamID, EB
 				LogError("Buffer g_sBeginAuthSessionFailed is full");
 			else
 				strcopy(g_sBeginAuthSessionFailed[client], sizeof(g_sBeginAuthSessionFailed[]), steamID);
-			return k_EBeginAuthSessionResultOK;
 		}
+		return k_EBeginAuthSessionResultOK;
 	}
 	return eBeginAuthSessionResult;
+}
+
+public bool OnClientPreConnectEx(const char[] name, char password[255], const char[] ip, const char[] steamID, char rejectReason[255])
+{
+	int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), steamID);
+	int spooferclient = GetSpooferClient(steamID);
+	if (index != -1 && spooferclient != -1)
+	{
+		bool bSteamLegal = g_sBeginAuthSessionFailedDuplicate[index] ? false : !g_bSteamLegal[index];
+		if (g_hCvar_Log.BoolValue)
+			LogMessage("OnClientPreConnectEx[%s]: legal(%d)", steamID, bSteamLegal);
+
+		if (IsIncomingClientSpoofing(steamID, bSteamLegal))
+		{
+			LogMessage("[%s] Kicking incoming spoofer client", steamID);
+			Format(rejectReason, sizeof(rejectReason), "Steam ID already in use on server");
+			return false;
+		}
+		else
+		{
+			if (spooferclient != -1)
+			{
+				LogMessage("[%s] Kicking spoofer client", steamID);
+				KickClientEx(spooferclient, "Same Steam ID connected.");
+				OnBeginAuthSessionResult(steamID, k_EBeginAuthSessionResultInvalidTicket);
+			}
+			else
+			{
+				LogError("[%s] Unable to find spoofer client index", steamID);
+				Format(rejectReason, sizeof(rejectReason), "Unexpected connection error, please try again");
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 public void OnClientConnected(int client)
 {
 	char sSteamID[64];
 	GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID), false);
+
+	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "%s", sSteamID);
 
 	int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), sSteamID);
 	if (index != -1)
@@ -322,9 +357,6 @@ public EAuthSessionResponse OnValidateAuthTicketResponse(const char[] steamID, E
 
 	if (g_hCvar_Log.BoolValue)
 		LogMessage("OnValidateAuthTicketResponse[%s]: response(%d), legal(%d)", steamID, eAuthSessionResponse, bSteamLegal);
-
-	if (IsClientSpoofing(steamID, bSteamLegal))
-		return k_EAuthSessionResponseLoggedInElseWhere;
 
 	int client = 0;
 	while (client < sizeof(g_sAuthSessionReponseValidated))
