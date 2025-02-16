@@ -72,7 +72,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.7"
+	version      = "2.2.8"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -106,6 +106,8 @@ public void OnPluginStart()
 
 	g_hCvar_AuthIdType = CreateConVar("sm_manager_authid_type", "1", "AuthID type used for sm_steamid cmd [0 = Engine, 1 = Steam2, 2 = Steam3, 3 = Steam64]", FCVAR_NONE, true, 0.0, true, 3.0);
 
+	HookEvent("player_disconnect", Event_ClientDisconnect, EventHookMode_Pre);
+
 	RegConsoleCmd("sm_steamid", Command_SteamID, "Retrieves your Steam ID");
 	RegConsoleCmd("sm_auth", Command_GetAuth, "Retrieves the Steam ID of a player");
 
@@ -126,29 +128,32 @@ public void OnPluginStart()
 	}
 }
 
-public void OnClientDisconnect(int client)
+public void Event_ClientDisconnect(Handle event, const char[] name, bool dontBroadcast)
 {
-	#if defined _connect_included
-	if (!IsFakeClient(client) && !IsClientSourceTV(client))
-	{
-		int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), sAuthID32[client]);
-		if (index != -1)
-		{
-			if (g_hCvar_Log.BoolValue)
-				LogMessage("OnClientDisconnect g_sBeginAuthSessionFailed[%d][%s]: duplicate(%d)", index, g_sBeginAuthSessionFailed[index], g_sBeginAuthSessionFailedDuplicate[index]);
-			g_sBeginAuthSessionFailed[index] = "\0";
-			g_sBeginAuthSessionFailedDuplicate[index] = false;
-		}
+	int userid = GetEventInt(event, "userid");
+	int client = GetClientOfUserId(userid);
 
-		index = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), sAuthID32[client]);
-		if (index != -1)
-		{
-			g_sAuthSessionReponseValidated[index] = "\0";
-			g_eAuthSessionResponse[index] = k_EAuthSessionResponseUserNotConnectedToSteam;
-			g_bSteamLegal[index] = false;
-		}
-		else
-			LogMessage("%L was not found in auth session response array", client);
+	if (g_hCvar_Log.BoolValue)
+		LogMessage("Event_ClientDisconnect %d", client);
+
+	#if defined _connect_included
+	int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), sAuthID32[client]);
+	if (index != -1)
+	{
+		if (g_hCvar_Log.BoolValue)
+			LogMessage("OnClientDisconnect g_sBeginAuthSessionFailed[%d][%s]: duplicate(%d)", index, g_sBeginAuthSessionFailed[index], g_sBeginAuthSessionFailedDuplicate[index]);
+		g_sBeginAuthSessionFailed[index] = "\0";
+		g_sBeginAuthSessionFailedDuplicate[index] = false;
+	}
+
+	index = FindStringInList(g_sAuthSessionReponseValidated, sizeof(g_sAuthSessionReponseValidated), sAuthID32[client]);
+	if (index != -1)
+	{
+		if (g_hCvar_Log.BoolValue)
+			LogMessage("OnClientDisconnect g_sAuthSessionReponseValidated[index](%s) response(%d) legal(%d)", g_sAuthSessionReponseValidated[index], g_eAuthSessionResponse[index], g_bSteamLegal[index]);
+		g_sAuthSessionReponseValidated[index][0] = '\0';
+		g_eAuthSessionResponse[index] = k_EAuthSessionResponseUserNotConnectedToSteam;
+		g_bSteamLegal[index] = false;
 	}
 	#endif
 
@@ -302,6 +307,9 @@ public EBeginAuthSessionResult OnBeginAuthSessionResult(const char[] steamID, EB
 
 public bool OnClientPreConnectEx(const char[] name, char password[255], const char[] ip, const char[] steamID, char rejectReason[255])
 {
+	if (g_hCvar_Log.BoolValue)
+		LogMessage("OnClientPreConnectEx %s", steamID);
+
 	int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), steamID);
 	int spooferclient = GetSpooferClient(steamID);
 	if (index != -1 && spooferclient != -1)
@@ -337,13 +345,16 @@ public bool OnClientPreConnectEx(const char[] name, char password[255], const ch
 
 public void OnClientConnected(int client)
 {
+	if (g_hCvar_Log.BoolValue)
+		LogMessage("OnClientConnected %L", client);
+
 	char sSteamID[64];
 	GetClientAuthId(client, AuthId_Steam2, sSteamID, sizeof(sSteamID), false);
 
 	FormatEx(sAuthID32[client], sizeof(sAuthID32[]), "%s", sSteamID);
 
 	int index = FindStringInList(g_sBeginAuthSessionFailed, sizeof(g_sBeginAuthSessionFailed), sSteamID);
-	if (index != -1)
+	if (index != -1 && !SteamClientGotValidateAuthTicketResponse(sAuthID32[client]))
 	{
 		char sSteamID64[128];
 		GetClientAuthId(client, AuthId_SteamID64, sSteamID64, sizeof(sSteamID64), false);
