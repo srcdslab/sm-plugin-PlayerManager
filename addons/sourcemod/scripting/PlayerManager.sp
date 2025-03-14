@@ -72,7 +72,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.8"
+	version      = "2.2.9"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -205,7 +205,7 @@ public void OnClientAuthorized(int client, const char[] sAuthID)
 	pack.WriteString(sAddress);
 	pack.WriteCell(iConnectionType);
 
-	SQLSelect_Connection(INVALID_HANDLE, pack);
+	SQLSelect_Connection(pack);
 #endif
 }
 
@@ -579,14 +579,14 @@ stock void OnSQLConnected(Handle hParent, Handle hChild, const char[] err, any d
 	else
 		g_bSQLite = true;
 
-	SQLSetNames(INVALID_HANDLE);
+	SQLSetNames();
 
-	SQLTableCreation_Connection(INVALID_HANDLE);
+	SQLTableCreation_Connection();
 
 	SQL_UnlockDatabase(g_hDatabase);
 }
 
-stock Action SQLSetNames(Handle timer)
+stock void SQLSetNames()
 {
 	if (!g_bSQLite)
 	{
@@ -594,7 +594,6 @@ stock Action SQLSetNames(Handle timer)
 		Format(sQuery, sizeof(sQuery), "SET NAMES \"%s\"", DB_CHARSET);
 		SQL_TQuery(g_hDatabase, OnSqlSetNames, sQuery);
 	}
-	return Plugin_Stop;
 }
 
 stock void OnSqlSetNames(Handle hParent, Handle hChild, const char[] err, any data)
@@ -606,7 +605,7 @@ stock void OnSqlSetNames(Handle hParent, Handle hChild, const char[] err, any da
 	}
 }
 
-stock Action SQLTableCreation_Connection(Handle timer)
+stock void SQLTableCreation_Connection()
 {
 	char sQuery[MAX_SQL_QUERY_LENGTH];
 	if (g_bSQLite)
@@ -615,7 +614,6 @@ stock Action SQLTableCreation_Connection(Handle timer)
 		Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS connection (`auth` VARCHAR(32) NOT NULL, `type` INT(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`auth`)) CHARACTER SET %s COLLATE %s;", DB_CHARSET, DB_COLLATION);
 
 	SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, sQuery);
-	return Plugin_Stop;
 }
 
 public void OnSQLTableCreated_Connection(Handle hParent, Handle hChild, const char[] err, any data)
@@ -627,7 +625,7 @@ public void OnSQLTableCreated_Connection(Handle hParent, Handle hChild, const ch
 	}
 }
 
-stock Action SQLSelect_Connection(Handle timer, any data)
+stock Action SQLSelect_Connection(any data)
 {
 	if (g_hDatabase == null)
 		return Plugin_Stop;
@@ -647,7 +645,7 @@ stock Action SQLSelect_Connection(Handle timer, any data)
 	return Plugin_Stop;
 }
 
-stock Action SQLInsert_Connection(Handle timer, any data)
+stock Action SQLInsert_Connection(any data)
 {
 	if (g_hDatabase == null)
 		return Plugin_Stop;
@@ -715,7 +713,7 @@ stock void OnSQLSelect_Connection(Handle hParent, Handle hChild, const char[] er
 		}
 	}
 
-	SQLInsert_Connection(INVALID_HANDLE, data);
+	SQLInsert_Connection(data);
 }
 
 public void OnSQLInsert_Connection(Handle hParent, Handle hChild, const char[] err, any data)
