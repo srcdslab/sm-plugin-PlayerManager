@@ -41,10 +41,10 @@ ConVar g_cvQueryRetry;
 /* DATABASE */
 enum DatabaseState
 {
-    DatabaseState_Disconnected = 0,
-    DatabaseState_Wait,
-    DatabaseState_Connecting,
-    DatabaseState_Connected,
+	DatabaseState_Disconnected = 0,
+	DatabaseState_Wait,
+	DatabaseState_Connecting,
+	DatabaseState_Connected,
 }
 
 DatabaseState g_DatabaseState;
