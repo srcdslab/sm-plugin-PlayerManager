@@ -51,8 +51,8 @@ DatabaseState g_DatabaseState;
 Database g_hDatabase;
 
 bool g_bSQLite = true;
-int  g_iConnectLock = 0;
-int  g_iSequence = 0;
+int g_iConnectLock = 0;
+int g_iSequence = 0;
 float RetryTime = 15.0;
 
 #define MAX_STEAMID_BUFFER 1024
