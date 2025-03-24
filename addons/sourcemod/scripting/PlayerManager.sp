@@ -36,9 +36,24 @@ ConVar g_hCvar_BlockAdmin;
 ConVar g_hCvar_BlockVoice;
 ConVar g_hCvar_AuthSessionResponseLegal;
 ConVar g_hCvar_AuthAntiSpoof;
+ConVar g_cvQueryRetry;
 
 /* DATABASE */
-Handle g_hDatabase = null;
+enum DatabaseState
+{
+    DatabaseState_Disconnected = 0,
+    DatabaseState_Wait,
+    DatabaseState_Connecting,
+    DatabaseState_Connected,
+}
+
+DatabaseState g_DatabaseState;
+Database g_hDatabase;
+
+bool g_bSQLite = true;
+int  g_iConnectLock = 0;
+int  g_iSequence = 0;
+float RetryTime = 15.0;
 
 #define MAX_STEAMID_BUFFER 1024
 
@@ -50,7 +65,6 @@ char g_sAuthSessionReponseValidated[MAX_STEAMID_BUFFER][64];
 EAuthSessionResponse g_eAuthSessionResponse[MAX_STEAMID_BUFFER] = { k_EAuthSessionResponseUserNotConnectedToSteam, ... };
 bool g_bSteamLegal[MAX_STEAMID_BUFFER] = { false, ... };
 
-bool g_bSQLite = true;
 #endif
 
 enum BlockVPN
@@ -72,7 +86,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.2.9"
+	version      = "2.3.0"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -100,6 +114,7 @@ public void OnPluginStart()
 	g_hCvar_AuthSessionResponseLegal = CreateConVar("sm_manager_auth_session_response_legal", "0,3,4,5,9", "List of EAuthSessionResponse that are considered as Steam legal (Defined in steam_api_interop.cs).");
 	g_hCvar_AuthAntiSpoof = CreateConVar("sm_manager_auth_antispoof", "1", "0 = Disable, 1 = Prevent steam users to be spoofed by nosteamers, 2 = 1 + reject incoming same nosteam id");
 	g_hCvar_Log = CreateConVar("sm_manager_log", "0", "Log a bunch of checks.", FCVAR_NONE, true, 0.0, true, 1.0);
+	g_cvQueryRetry = CreateConVar("sm_manager_query_retry", "5", "How many times should the plugin retry after a fail-to-run query?", FCVAR_NONE, true, 0.0, false, 0.0);
 #else
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "0", "1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 1.0);
 #endif
@@ -167,13 +182,7 @@ public void OnConfigsExecuted()
 	if(!g_hCvar_BlockSpoof.BoolValue)
 		return;
 
-	if (g_hDatabase != null)
-		delete g_hDatabase;
-
-	if (SQL_CheckConfig(DATABASE_NAME))
-		SQL_TConnect(OnSQLConnected, DATABASE_NAME);
-	else
-		SetFailState("Could not find \"%s\" entry in databases.cfg.", DATABASE_NAME);
+	DB_Connect();
 }
 #endif
 
@@ -321,6 +330,7 @@ public bool OnClientPreConnectEx(const char[] name, char password[255], const ch
 		if (IsIncomingClientSpoofing(steamID, bSteamLegal))
 		{
 			LogMessage("[%s] Kicking incoming spoofer client", steamID);
+			LogPotentialSpoofer(spooferclient);
 			Format(rejectReason, sizeof(rejectReason), "Steam ID already in use on server");
 			return false;
 		}
@@ -329,6 +339,7 @@ public bool OnClientPreConnectEx(const char[] name, char password[255], const ch
 			if (spooferclient != -1)
 			{
 				LogMessage("[%s] Kicking spoofer client", steamID);
+				LogPotentialSpoofer(spooferclient);
 				KickClientEx(spooferclient, "Same Steam ID connected.");
 				OnBeginAuthSessionResult(steamID, k_EBeginAuthSessionResultInvalidTicket);
 			}
@@ -559,99 +570,239 @@ stock void GetFormattedAuthId(int client, AuthIdType authType, char[] sAuthID, i
 	}
 }
 
+//  #####   #####  #
+// #     # #     # #
+// #       #     # #
+//  #####  #     # #
+//       # #   # # #
+// #     # #    #  #
+//  #####   #### # #######
+
 #if defined _connect_included
-stock void OnSQLConnected(Handle hParent, Handle hChild, const char[] err, any data)
+public void OnMapEnd()
 {
-	if (hChild == null)
+	// Clean up on map end just so we can start a fresh connection when we need it later.
+	// It prevent keeping the connection open for a long time.
+	// Also it is necessary for using SQL_SetCharset
+	DB_Disconnect();
+}
+
+public void OnPluginEnd()
+{
+	DB_Disconnect();
+}
+
+stock void DB_Disconnect()
+{
+	if (g_hDatabase != null)
 	{
-		LogError("Failed to connect to database \"%s\". (%s)", DATABASE_NAME, err);
+		delete g_hDatabase;
+		g_hDatabase = null;
+	}
+
+	g_DatabaseState = DatabaseState_Disconnected;
+}
+stock bool DB_Connect()
+{
+	//PrintToServer("DB_Connect(handle %d, state %d, lock %d)", g_hDatabase, g_DatabaseState, g_iConnectLock);
+
+	if (g_hDatabase != null && g_DatabaseState == DatabaseState_Connected)
+		return true;
+
+	// 100k connections in a minute is bad idea..
+	if (g_DatabaseState == DatabaseState_Wait)
+		return false;
+
+	if (g_DatabaseState != DatabaseState_Connecting)
+	{
+		if (!SQL_CheckConfig(DATABASE_NAME))
+  			SetFailState("Could not find \"%s\" entry in databases.cfg.", DATABASE_NAME);
+
+		g_DatabaseState = DatabaseState_Connecting;
+		g_iConnectLock = g_iSequence++;
+		Database.Connect(GotDatabase, DATABASE_NAME, g_iConnectLock);
+	}
+
+	return false;
+}
+
+public void GotDatabase(Database db, const char[] error, any data)
+{
+	// See if the connection is valid.
+	if (db == null)
+	{
+		LogError("Connecting to database \"%s\" failed: %s", DATABASE_NAME, error);
+		return;
+	}
+
+	LogMessage("Connected to database.");
+
+	//PrintToServer("GotDatabase(data: %d, lock: %d, g_h: %d, db: %d)", data, g_iConnectLock, g_hDatabase, db);
+
+	// If this happens to be an old connection request, ignore it.
+	if (data != g_iConnectLock || (g_hDatabase != null && g_DatabaseState == DatabaseState_Connected))
+	{
+		if (db)
+			delete db;
 		return;
 	}
 
 	char sDriver[16];
-	g_hDatabase = CloneHandle(hChild);
-	SQL_GetDriverIdent(hParent, sDriver, sizeof(sDriver));
-
-	SQL_LockDatabase(g_hDatabase);
+	SQL_GetDriverIdent(g_hDatabase, sDriver, sizeof(sDriver));
 
 	if (!strncmp(sDriver, "my", 2, false))
 		g_bSQLite = false;
 	else
 		g_bSQLite = true;
 
-	SQLSetNames();
+	g_iConnectLock = 0;
+	g_DatabaseState = DatabaseState_Connected;
+	g_hDatabase = db;
 
-	SQLTableCreation_Connection();
-
-	SQL_UnlockDatabase(g_hDatabase);
+	DB_SetNames(db);
+	DB_CreateTable(db);
 }
 
-stock void SQLSetNames()
+stock bool DB_Conn_Lost(DBResultSet db)
 {
-	if (!g_bSQLite)
+	if (db == null)
 	{
-		char sQuery[MAX_SQL_QUERY_LENGTH];
-		Format(sQuery, sizeof(sQuery), "SET NAMES \"%s\"", DB_CHARSET);
-		SQL_TQuery(g_hDatabase, OnSqlSetNames, sQuery);
+		if (g_hDatabase != null)
+		{
+			LogError("Lost connection to DB. Reconnect after delay.");
+			delete g_hDatabase;
+			g_hDatabase = null;
+		}
+
+		if (g_DatabaseState != DatabaseState_Wait && g_DatabaseState != DatabaseState_Connecting)
+		{
+			g_DatabaseState = DatabaseState_Wait;
+			CreateTimer(RetryTime, TimerDB_Reconnect, _, TIMER_FLAG_NO_MAPCHANGE);
+		}
+
+		return true;
 	}
+
+	return false;
 }
 
-stock void OnSqlSetNames(Handle hParent, Handle hChild, const char[] err, any data)
+stock void DB_Reconnect()
 {
-	if (hChild == null)
-	{
-		LogError("Database error while setting names as utf8. (%s)", err);
-		return;
-	}
+	g_DatabaseState = DatabaseState_Disconnected;
+	DB_Connect();
 }
 
-stock void SQLTableCreation_Connection()
+stock void DB_SetNames(Database db)
 {
-	char sQuery[MAX_SQL_QUERY_LENGTH];
 	if (g_bSQLite)
-		Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS connection (`auth` TEXT NOT NULL, `type` INTEGER(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` INTEGER(32) NOT NULL, PRIMARY KEY (`auth`)) CHARACTER SET %s COLLATE %s;", DB_CHARSET, DB_COLLATION);
-	else
-		Format(sQuery, sizeof(sQuery), "CREATE TABLE IF NOT EXISTS connection (`auth` VARCHAR(32) NOT NULL, `type` INT(2) NOT NULL, `address` VARCHAR(16) NOT NULL, `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`auth`)) CHARACTER SET %s COLLATE %s;", DB_CHARSET, DB_COLLATION);
+		return;
 
-	SQL_TQuery(g_hDatabase, OnSQLTableCreated_Connection, sQuery);
+	static int retries = 0;
+	char sQuery[MAX_SQL_QUERY_LENGTH];
+	Format(sQuery, sizeof(sQuery), "SET NAMES \"%s\"", DB_CHARSET);
+
+	if (DB_Connect())
+	{
+		db.Query(Query_SetNamesErrorCheck, sQuery);
+	}
+	else
+	{
+		if (retries < g_cvQueryRetry.IntValue)
+		{
+			PrintToServer("[PlayerManager] Failed to connect to database, retrying... (%d/%d)", retries, g_cvQueryRetry.IntValue);
+			PrintToServer("[PlayerManager] Query: %s", sQuery);
+			CreateTimer(1.2 * retries, TimerDB_SetNames, db, TIMER_FLAG_NO_MAPCHANGE);
+			retries++;
+			return;
+		}
+		else
+		{
+			LogError("Failed to connect to database after %d retries, aborting", retries);
+		}
+	}
+
+	retries = 0;
 }
 
-public void OnSQLTableCreated_Connection(Handle hParent, Handle hChild, const char[] err, any data)
+public Action TimerDB_SetNames(Handle timer, any data)
 {
-	if (hChild == null)
+	Database db = view_as<Database>(data);
+	DB_SetNames(db);
+	return Plugin_Continue;
+}
+
+stock void DB_CreateTable(Database db)
+{
+	static int retries = 0;
+	char sQuery[MAX_SQL_QUERY_LENGTH];
+
+	if (g_bSQLite)
+		FormatEx(sQuery, sizeof(sQuery),
+			"CREATE TABLE IF NOT EXISTS `connection` ( \
+			`auth` TEXT NOT NULL, \
+			`type` INTEGER(2) NOT NULL, \
+			`address` VARCHAR(16) NOT NULL, \
+			`timestamp` INTEGER(32) NOT NULL, \
+			PRIMARY KEY (`auth`) \
+			) CHARACTER SET %s COLLATE %s;"
+			, DB_CHARSET, DB_COLLATION);
+	else
+		FormatEx(sQuery, sizeof(sQuery), 
+			"CREATE TABLE IF NOT EXISTS `connection` ( \
+			`auth` VARCHAR(32) NOT NULL, \
+			`type` INT(2) NOT NULL, \
+			`address` VARCHAR(16) NOT NULL, \
+			`timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+			PRIMARY KEY (`auth`) \
+			) CHARACTER SET %s COLLATE %s;"
+			, DB_CHARSET, DB_COLLATION);
+
+	if (DB_Connect())
 	{
-		LogError("Database error while creating/checking for \"connection\" table. (%s)", DATABASE_NAME, err);
+		db.Query(Query_TableCreationErrorCheck, sQuery);
+	}
+	else
+	{
+		if (retries < g_cvQueryRetry.IntValue)
+		{
+			PrintToServer("[PlayerManager] Failed to connect to database, retrying... (%d/%d)", retries, g_cvQueryRetry.IntValue);
+			PrintToServer("[PlayerManager] Query: %s", sQuery);
+			CreateTimer(1.2 * retries, TimerDB_CreateTable, db, TIMER_FLAG_NO_MAPCHANGE);
+			retries++;
+			return;
+		}
+		else
+		{
+			LogError("Failed to connect to database after %d retries, aborting", retries);
+		}
+	}
+
+	retries = 0;
+}
+
+public Action TimerDB_CreateTable(Handle timer, any data)
+{
+	Database db = view_as<Database>(data);
+	DB_CreateTable(db);
+	return Plugin_Continue;
+}
+
+public Action TimerDB_Reconnect(Handle timer, any data)
+{
+	DB_Reconnect();
+	return Plugin_Continue;
+}
+
+public void SQLInsert_PlayerConnection(any data)
+{
+	DataPack pack = view_as<DataPack>(data);
+	pack.Reset();
+
+	if (g_hDatabase == null)
+	{
+		delete pack;
 		return;
 	}
-}
-
-stock Action SQLSelect_Connection(any data)
-{
-	if (g_hDatabase == null)
-		return Plugin_Stop;
-
-	DataPack pack = view_as<DataPack>(data);
-	pack.Reset();
-
-	char sAuthID[32];
-
-	pack.ReadCell();
-	pack.ReadString(sAuthID, sizeof(sAuthID));
-
-	char sQuery[512];
-	Format(sQuery, sizeof(sQuery), "SELECT `auth`, `type`, `address` FROM connection WHERE auth='%s'", sAuthID);
-
-	SQL_TQuery(g_hDatabase, OnSQLSelect_Connection, sQuery, data, DBPrio_Low);
-	return Plugin_Stop;
-}
-
-stock Action SQLInsert_Connection(any data)
-{
-	if (g_hDatabase == null)
-		return Plugin_Stop;
-
-	DataPack pack = view_as<DataPack>(data);
-	pack.Reset();
 
 	char sAuthID[32];
 	char sAddress[16];
@@ -664,11 +815,61 @@ stock Action SQLInsert_Connection(any data)
 	char sQuery[512];
 	Format(sQuery, sizeof(sQuery), "INSERT INTO connection (auth, type, address) VALUES ('%s', '%d', '%s') ON DUPLICATE KEY UPDATE type='%d', address='%s';", sAuthID, iType, sAddress, iType, sAddress);
 
-	SQL_TQuery(g_hDatabase, OnSQLInsert_Connection, sQuery, data, DBPrio_Low);
-	return Plugin_Stop;
+	g_hDatabase.Query(Query_InsertConnection, sQuery, data, DBPrio_Low);
 }
 
-stock void OnSQLSelect_Connection(Handle hParent, Handle hChild, const char[] err, any data)
+public void SQLSelect_Connection(any data)
+{
+	DataPack pack = view_as<DataPack>(data);
+	pack.Reset();
+
+	if (g_hDatabase == null)
+	{
+		delete pack;
+		return;
+	}
+
+	char sAuthID[32];
+
+	pack.ReadCell();
+	pack.ReadString(sAuthID, sizeof(sAuthID));
+
+	char sQuery[512];
+	Format(sQuery, sizeof(sQuery), "SELECT `auth`, `type`, `address` FROM connection WHERE auth='%s'", sAuthID);
+
+	g_hDatabase.Query(Query_SelectConnection, sQuery, data, DBPrio_Low);
+}
+
+public void Query_TableCreationErrorCheck(Database db, DBResultSet results, const char[] error, any data)
+{
+	if (DB_Conn_Lost(results) || error[0])
+		LogError("Database error while creating/checking for \"connection\" table. (%s)", DATABASE_NAME, error);
+}
+
+public void Query_SetNamesErrorCheck(Database db, DBResultSet results, const char[] error, any data)
+{
+	if (DB_Conn_Lost(results) || error[0])
+		LogError("Database error while setting names as utf8. (%s)", error);
+}
+
+public void Query_ErrorCheck(Database db, DBResultSet results, const char[] error, any data)
+{
+	if (DB_Conn_Lost(results) || error[0])
+		LogError("%T (%s)", "Failed to query database", LANG_SERVER, error);
+}
+
+public void Query_InsertConnection(Database db, DBResultSet results, const char[] error, any data)
+{
+	DataPack pack = view_as<DataPack>(data);
+	pack.Reset();
+
+	if (DB_Conn_Lost(results) || error[0])
+		LogError("An error occurred while inserting a connection. (%s)", error);
+
+	delete pack;
+}
+
+stock void Query_SelectConnection(Database db, DBResultSet results, const char[] error, any data)
 {
 	DataPack pack = view_as<DataPack>(data);
 	pack.Reset();
@@ -681,21 +882,21 @@ stock void OnSQLSelect_Connection(Handle hParent, Handle hChild, const char[] er
 	pack.ReadString(sAddress, sizeof(sAddress));
 	int type = pack.ReadCell();
 
-	if (hChild == null)
+	if (DB_Conn_Lost(results) || error[0])
 	{
-		LogError("An error occurred while querying the database for connection details. (%s)", err);
+		LogError("An error occurred while querying the database for connection details. (%s)", error);
 		delete pack;
 		return;
 	}
-	else if (SQL_FetchRow(hChild))
+	else if (SQL_FetchRow(results))
 	{
 		char sResultAuthID[32];
 		char sResultAddress[16];
 		int iResultType;
 
-		SQL_FetchString(hChild, 0, sResultAuthID, sizeof(sResultAuthID));
-		iResultType = SQL_FetchInt(hChild, 1);
-		SQL_FetchString(hChild, 2, sResultAddress, sizeof(sResultAddress));
+		SQL_FetchString(results, 0, sResultAuthID, sizeof(sResultAuthID));
+		iResultType = SQL_FetchInt(results, 1);
+		SQL_FetchString(results, 2, sResultAddress, sizeof(sResultAddress));
 
 		if (type == view_as<int>(ct_NoSteam) && iResultType == view_as<int>(ct_Steam))
 		{
@@ -713,20 +914,7 @@ stock void OnSQLSelect_Connection(Handle hParent, Handle hChild, const char[] er
 		}
 	}
 
-	SQLInsert_Connection(data);
-}
-
-public void OnSQLInsert_Connection(Handle hParent, Handle hChild, const char[] err, any data)
-{
-	DataPack pack = view_as<DataPack>(data);
-	pack.Reset();
-
-	if (hChild == null)
-	{
-		LogError("An error occurred while inserting a connection. (%s)", err);
-	}
-
-	delete pack;
+	SQLInsert_PlayerConnection(data);
 }
 
 stock void LogPotentialSpoofer(int client)
