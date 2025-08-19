@@ -86,7 +86,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.3.1"
+	version      = "2.3.2"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -647,17 +647,17 @@ public void GotDatabase(Database db, const char[] error, any data)
 		return;
 	}
 
+	g_iConnectLock = 0;
+	g_DatabaseState = DatabaseState_Connected;
+	g_hDatabase = db;
+
 	char sDriver[16];
-	SQL_GetDriverIdent(g_hDatabase, sDriver, sizeof(sDriver));
+	SQL_GetDriverIdent(SQL_ReadDriver(g_hDatabase), sDriver, sizeof(sDriver));
 
 	if (!strncmp(sDriver, "my", 2, false))
 		g_bSQLite = false;
 	else
 		g_bSQLite = true;
-
-	g_iConnectLock = 0;
-	g_DatabaseState = DatabaseState_Connected;
-	g_hDatabase = db;
 
 	DB_SetNames(db);
 	DB_CreateTable(db);
@@ -744,8 +744,8 @@ stock void DB_CreateTable(Database db)
 			`address` VARCHAR(16) NOT NULL, \
 			`timestamp` INTEGER(32) NOT NULL, \
 			PRIMARY KEY (`auth`) \
-			) CHARACTER SET %s COLLATE %s;"
-			, DB_CHARSET, DB_COLLATION);
+			);"
+		);
 	else
 		FormatEx(sQuery, sizeof(sQuery), 
 			"CREATE TABLE IF NOT EXISTS `connection` ( \
@@ -813,7 +813,14 @@ public void SQLInsert_PlayerConnection(any data)
 	int iType = pack.ReadCell();
 
 	char sQuery[512];
-	Format(sQuery, sizeof(sQuery), "INSERT INTO connection (auth, type, address) VALUES ('%s', '%d', '%s') ON DUPLICATE KEY UPDATE type='%d', address='%s';", sAuthID, iType, sAddress, iType, sAddress);
+	if (g_bSQLite)
+	{
+		Format(sQuery, sizeof(sQuery), "INSERT OR REPLACE INTO connection (auth, type, address, timestamp) VALUES ('%s', '%d', '%s', strftime('%%s','now'));", sAuthID, iType, sAddress);
+	}
+	else
+	{
+		Format(sQuery, sizeof(sQuery), "INSERT INTO connection (auth, type, address) VALUES ('%s', '%d', '%s') ON DUPLICATE KEY UPDATE type='%d', address='%s';", sAuthID, iType, sAddress, iType, sAddress);
+	}
 
 	g_hDatabase.Query(Query_InsertConnection, sQuery, data, DBPrio_Low);
 }
@@ -843,7 +850,7 @@ public void SQLSelect_Connection(any data)
 public void Query_TableCreationErrorCheck(Database db, DBResultSet results, const char[] error, any data)
 {
 	if (DB_Conn_Lost(results) || error[0])
-		LogError("Database error while creating/checking for \"connection\" table. (%s)", DATABASE_NAME, error);
+		LogError("Database error while creating/checking for \"connection\" table. (%s) (%s)", DATABASE_NAME, error);
 }
 
 public void Query_SetNamesErrorCheck(Database db, DBResultSet results, const char[] error, any data)
