@@ -86,7 +86,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.3.3"
+	version      = "2.3.4"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -956,8 +956,13 @@ void OnPlayerSummaryReceived(HTTPResponse response, any client)
 
 	// Indicate that the response contains a JSON object
 	JSONObject responseData = view_as<JSONObject>(response.Data);
+	if (responseData == null)
+		return;
 
 	JSONObject responseJSON = view_as<JSONObject>(responseData.Get("response"));
+
+	if (responseJSON == null)
+		return;
 
 	APIWebResponse(responseJSON, client);
 }
@@ -972,6 +977,11 @@ public void APIWebResponse(JSONObject responseJSON, int client)
 	}
 
 	JSONArray players = view_as<JSONArray>(responseJSON.Get("players"));
+	if (players == null)
+	{
+		delete responseJSON;
+		return;
+	}
 
 	if (!players.Length)
 	{
