@@ -135,7 +135,7 @@ public void OnPluginStart()
 	if (g_bLate)
 	{
 		char sSteam32ID[32];
-		for (int i = 1; i < MaxClients; i++)
+		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (IsClientInGame(i) && !IsFakeClient(i) && IsClientAuthorized(i) && GetClientAuthId(i, AuthId_Steam2, sSteam32ID, sizeof(sSteam32ID)))
 				OnClientAuthorized(i, sSteam32ID);
