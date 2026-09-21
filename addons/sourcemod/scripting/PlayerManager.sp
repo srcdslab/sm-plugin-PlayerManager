@@ -86,7 +86,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.3.4"
+	version      = "2.3.5"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -135,7 +135,7 @@ public void OnPluginStart()
 	if (g_bLate)
 	{
 		char sSteam32ID[32];
-		for (int i = 1; i < MaxClients; i++)
+		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (IsClientInGame(i) && !IsFakeClient(i) && IsClientAuthorized(i) && GetClientAuthId(i, AuthId_Steam2, sSteam32ID, sizeof(sSteam32ID)))
 				OnClientAuthorized(i, sSteam32ID);
