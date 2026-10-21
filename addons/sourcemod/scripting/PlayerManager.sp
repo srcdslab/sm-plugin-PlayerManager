@@ -86,7 +86,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.3.5"
+	version      = "2.3.6"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -143,9 +143,9 @@ public void OnPluginStart()
 	}
 }
 
-public void Event_ClientDisconnect(Handle event, const char[] name, bool dontBroadcast)
+public void Event_ClientDisconnect(Event event, const char[] name, bool dontBroadcast)
 {
-	int userid = GetEventInt(event, "userid");
+	int userid = event.GetInt("userid");
 	int client = GetClientOfUserId(userid);
 
 	if (g_hCvar_Log.BoolValue)
@@ -597,7 +597,6 @@ stock void DB_Disconnect()
 	if (g_hDatabase != null)
 	{
 		delete g_hDatabase;
-		g_hDatabase = null;
 	}
 
 	g_DatabaseState = DatabaseState_Disconnected;
@@ -652,7 +651,7 @@ public void GotDatabase(Database db, const char[] error, any data)
 	g_hDatabase = db;
 
 	char sDriver[16];
-	SQL_GetDriverIdent(SQL_ReadDriver(g_hDatabase), sDriver, sizeof(sDriver));
+	g_hDatabase.Driver.GetIdentifier(sDriver, sizeof(sDriver));
 
 	if (!strncmp(sDriver, "my", 2, false))
 		g_bSQLite = false;
@@ -671,7 +670,6 @@ stock bool DB_Conn_Lost(DBResultSet db)
 		{
 			LogError("Lost connection to DB. Reconnect after delay.");
 			delete g_hDatabase;
-			g_hDatabase = null;
 		}
 
 		if (g_DatabaseState != DatabaseState_Wait && g_DatabaseState != DatabaseState_Connecting)
@@ -901,15 +899,15 @@ stock void Query_SelectConnection(Database db, DBResultSet results, const char[]
 		delete pack;
 		return;
 	}
-	else if (SQL_FetchRow(results))
+	else if (results.FetchRow())
 	{
 		char sResultAuthID[32];
 		char sResultAddress[16];
 		int iResultType;
 
-		SQL_FetchString(results, 0, sResultAuthID, sizeof(sResultAuthID));
-		iResultType = SQL_FetchInt(results, 1);
-		SQL_FetchString(results, 2, sResultAddress, sizeof(sResultAddress));
+		results.FetchString(0, sResultAuthID, sizeof(sResultAuthID));
+		iResultType = results.FetchInt(1);
+		results.FetchString(2, sResultAddress, sizeof(sResultAddress));
 
 		if (type == view_as<int>(ct_NoSteam) && iResultType == view_as<int>(ct_Steam))
 		{
