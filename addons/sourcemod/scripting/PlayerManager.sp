@@ -88,7 +88,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.3.7"
+	version      = "2.3.8"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -921,7 +921,7 @@ stock void LogPotentialSpoofer(int client)
 	GetSteamAPIKey(sSteamAPIKey, sizeof(sSteamAPIKey));
 
 	static char sRequest[256];
-	FormatEx(sRequest, sizeof(sRequest), "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=%s&steamids=%s&format=json", sSteamAPIKey, sSteam64ID);
+	FormatEx(sRequest, sizeof(sRequest), "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=%s&steamids=%s&format=json", sSteamAPIKey, sSteam64ID);
 
 	HTTPRequest request = new HTTPRequest(sRequest);
 
