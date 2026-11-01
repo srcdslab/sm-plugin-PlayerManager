@@ -1,0 +1,55 @@
+"Phrases"
+{
+	"Kick Same SteamID"
+	{
+		"en"		"Same Steam ID connected."
+		"fr"		"Le même Steam ID s'est connecté."
+		"ru"		"Подключился игрок с тем же Steam ID."
+		"es"		"Se conectó alguien con el mismo Steam ID."
+		"de"		"Dieselbe Steam ID hat sich verbunden."
+		"pt"		"Alguém com o mesmo Steam ID se conectou."
+		"chi"		"相同的 Steam ID 已连接。"
+	}
+	"Auth Usage"
+	{
+		"en"		"Usage: {olive}sm_auth <target> <0|1|2|3>"
+		"fr"		"Utilisation : {olive}sm_auth <target> <0|1|2|3>"
+		"ru"		"Использование: {olive}sm_auth <target> <0|1|2|3>"
+		"es"		"Uso: {olive}sm_auth <target> <0|1|2|3>"
+		"de"		"Verwendung: {olive}sm_auth <target> <0|1|2|3>"
+		"pt"		"Uso: {olive}sm_auth <target> <0|1|2|3>"
+		"chi"		"用法：{olive}sm_auth <target> <0|1|2|3>"
+	}
+	"Your Auth ID"
+	{
+		"#format"	"{1:N},{2:s},{3:s}"
+		"en"		"{olive}{1}{default}, your {2} ID is: {blue}{3}"
+		"fr"		"{olive}{1}{default}, votre ID {2} est : {blue}{3}"
+		"ru"		"{olive}{1}{default}, ваш {2} ID: {blue}{3}"
+		"es"		"{olive}{1}{default}, tu ID {2} es: {blue}{3}"
+		"de"		"{olive}{1}{default}, deine {2}-ID ist: {blue}{3}"
+		"pt"		"{olive}{1}{default}, seu ID {2} é: {blue}{3}"
+		"chi"		"{olive}{1}{default}，你的 {2} ID 是：{blue}{3}"
+	}
+	"Player Auth ID"
+	{
+		"#format"	"{1:s},{2:N},{3:s}"
+		"en"		"{1} ID for player {olive}{2} {default}is: {blue}{3}"
+		"fr"		"ID {1} du joueur {olive}{2}{default} : {blue}{3}"
+		"ru"		"{1} ID игрока {olive}{2}{default}: {blue}{3}"
+		"es"		"ID {1} del jugador {olive}{2}{default}: {blue}{3}"
+		"de"		"{1}-ID von Spieler {olive}{2}{default}: {blue}{3}"
+		"pt"		"ID {1} do jogador {olive}{2}{default}: {blue}{3}"
+		"chi"		"玩家 {olive}{2} {default}的 {1} ID 是：{blue}{3}"
+	}
+	"Kick Not Authenticated"
+	{
+		"en"		"Trying to join with a legitimate Steam ID while not authenticated with Steam."
+		"fr"		"Tentative de connexion avec un Steam ID légitime sans être authentifié auprès de Steam."
+		"ru"		"Попытка входа с легитимным Steam ID без авторизации в Steam."
+		"es"		"Intento de conexión con un Steam ID legítimo sin estar autenticado en Steam."
+		"de"		"Verbindungsversuch mit einer legitimen Steam ID ohne Steam-Authentifizierung."
+		"pt"		"Tentativa de entrar com um Steam ID legítimo sem estar autenticado na Steam."
+		"chi"		"试图在未通过 Steam 验证的情况下使用合法的 Steam ID 加入。"
+	}
+}

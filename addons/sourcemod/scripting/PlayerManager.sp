@@ -88,7 +88,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.3.7"
+	version      = "2.3.8"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -107,6 +107,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int erro
 public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
+	LoadTranslations("PlayerManager.phrases");
 
 #if defined _connect_included
 	g_hCvar_BlockVPN = CreateConVar("sm_manager_block_vpn", "2", "3 = block steam, 2 = block nosteam, 1 = block everyone, 0 = disable.", FCVAR_NONE, true, 0.0, true, 3.0);
@@ -343,7 +344,7 @@ public bool OnClientPreConnectEx(const char[] name, char password[255], const ch
 			{
 				LogMessage("[%s] Kicking spoofer client", steamID);
 				LogPotentialSpoofer(spooferclient);
-				KickClientEx(spooferclient, "Same Steam ID connected.");
+				KickClientEx(spooferclient, "%t", "Kick Same SteamID");
 				OnBeginAuthSessionResult(steamID, k_EBeginAuthSessionResultInvalidTicket);
 			}
 			else
@@ -510,7 +511,7 @@ public Action Command_GetAuth(int client, int args)
 
 	if (args == 0)
 	{
-		CReplyToCommand(client, "{green}[SM] {default}Usage: {olive}sm_auth <target> <0|1|2|3>");
+		CReplyToCommand(client, "{green}[SM] {default}%t", "Auth Usage");
 		return Plugin_Handled;
 	}
 
@@ -542,9 +543,9 @@ public Action Command_GetAuth(int client, int args)
 	GetFormattedAuthId(iTarget, view_as<AuthIdType>(iType), sAuthID, sizeof(sAuthID), sBuffer, sizeof(sBuffer));
 
 	if (iTarget == client)
-		CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your %s ID is: {blue}%s", client, sBuffer, sAuthID);
+		CReplyToCommand(client, "{green}[SM] %t", "Your Auth ID", client, sBuffer, sAuthID);
 	else
-		CReplyToCommand(client, "{green}[SM] {default}%s ID for player {olive}%N {default}is: {blue}%s", sBuffer, iTarget, sAuthID);
+		CReplyToCommand(client, "{green}[SM] {default}%t", "Player Auth ID", sBuffer, iTarget, sAuthID);
 
 	return Plugin_Handled;
 }
@@ -554,7 +555,7 @@ public Action Command_SteamID(int client, int args)
 	char sBuffer[64];
 	GetFormattedAuthId(client, view_as<AuthIdType>(g_hCvar_AuthIdType.IntValue), sAuthID, sizeof(sAuthID), sBuffer, sizeof(sBuffer));
 
-	CReplyToCommand(client, "{green}[SM] {olive}%N{default}, your %s ID is: {blue}%s", client, sBuffer, sAuthID);
+	CReplyToCommand(client, "{green}[SM] %t", "Your Auth ID", client, sBuffer, sAuthID);
 
 	return Plugin_Handled;
 }
@@ -899,7 +900,7 @@ stock void Query_SelectConnection(Database db, DBResultSet results, const char[]
 			else
 			{
 				LogAction(client, -1, "\"%L\" tried to join with a legitimate steamid while not authenticated with steam. Refusing connection, IPs dont match. (Known: %s | Current: %s)", client, sResultAddress, sAddress);
-				KickClient(client, "Trying to join with a legitimate steamid while not authenticated with steam.");
+				KickClient(client, "%t", "Kick Not Authenticated");
 			}
 			delete pack;
 			return;
