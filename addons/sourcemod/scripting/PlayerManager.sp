@@ -88,7 +88,7 @@ public Plugin myinfo =
 	name         = "PlayerManager",
 	author       = "zaCade, Neon, maxime1907, .Rushaway",
 	description  = "Manage clients, block spoofers...",
-	version      = "2.3.8"
+	version      = "2.3.9"
 };
 
 public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] sError, int errorSize)
@@ -313,9 +313,10 @@ public EBeginAuthSessionResult OnBeginAuthSessionResult(const char[] steamID, EB
 			else
 				strcopy(g_sBeginAuthSessionFailed[client], sizeof(g_sBeginAuthSessionFailed[]), steamID);
 		}
-		return k_EBeginAuthSessionResultOK;
 	}
-	return eBeginAuthSessionResult;
+
+	// Let every client connect, NoSteam included: any other result rejects the connection.
+	return k_EBeginAuthSessionResultOK;
 }
 
 public bool OnClientPreConnectEx(const char[] name, char password[255], const char[] ip, const char[] steamID, char rejectReason[255])
@@ -402,7 +403,10 @@ public EAuthSessionResponse OnValidateAuthTicketResponse(const char[] steamID, E
 		g_bSteamLegal[client] = bSteamLegal;
 	}
 
-	return bSteamLegal ? k_EAuthSessionResponseOK : eAuthSessionResponse;
+	// Keep every client, NoSteam included: any other response makes the server drop the client
+	// (OnClientConnected sends k_EAuthSessionResponseAuthTicketInvalid for NoSteam clients).
+	// Whether the client is Steam legal is kept in g_bSteamLegal.
+	return k_EAuthSessionResponseOK;
 }
 
 bool IsAuthSessionResponseSteamLegal(EAuthSessionResponse eAuthSessionResponse)
