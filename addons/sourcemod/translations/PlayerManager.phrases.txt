@@ -9,6 +9,12 @@
 		"de"		"Dieselbe Steam ID hat sich verbunden."
 		"pt"		"Alguém com o mesmo Steam ID se conectou."
 		"chi"		"相同的 Steam ID 已连接。"
+		"pl"		"Połączył się gracz z tym samym Steam ID."
+		"tr"		"Aynı Steam ID ile bağlanıldı."
+		"it"		"Si è connesso qualcuno con lo stesso Steam ID."
+		"ua"		"Підключився гравець з таким самим Steam ID."
+		"zho"		"相同的 Steam ID 已連線。"
+		"cze"		"Připojil se hráč se stejným Steam ID."
 	}
 	"Auth Usage"
 	{
@@ -19,6 +25,12 @@
 		"de"		"Verwendung: {olive}sm_auth <target> <0|1|2|3>"
 		"pt"		"Uso: {olive}sm_auth <target> <0|1|2|3>"
 		"chi"		"用法：{olive}sm_auth <target> <0|1|2|3>"
+		"pl"		"Użycie: {olive}sm_auth <target> <0|1|2|3>"
+		"tr"		"Kullanım: {olive}sm_auth <target> <0|1|2|3>"
+		"it"		"Uso: {olive}sm_auth <target> <0|1|2|3>"
+		"ua"		"Використання: {olive}sm_auth <target> <0|1|2|3>"
+		"zho"		"用法：{olive}sm_auth <target> <0|1|2|3>"
+		"cze"		"Použití: {olive}sm_auth <target> <0|1|2|3>"
 	}
 	"Your Auth ID"
 	{
@@ -30,6 +42,12 @@
 		"de"		"{olive}{1}{default}, deine {2}-ID ist: {blue}{3}"
 		"pt"		"{olive}{1}{default}, seu ID {2} é: {blue}{3}"
 		"chi"		"{olive}{1}{default}，你的 {2} ID 是：{blue}{3}"
+		"pl"		"{olive}{1}{default}, twoje ID {2} to: {blue}{3}"
+		"tr"		"{olive}{1}{default}, {2} ID'n: {blue}{3}"
+		"it"		"{olive}{1}{default}, il tuo ID {2} è: {blue}{3}"
+		"ua"		"{olive}{1}{default}, твій {2} ID: {blue}{3}"
+		"zho"		"{olive}{1}{default}，你的 {2} ID 是：{blue}{3}"
+		"cze"		"{olive}{1}{default}, tvé {2} ID je: {blue}{3}"
 	}
 	"Player Auth ID"
 	{
@@ -41,6 +59,12 @@
 		"de"		"{1}-ID von Spieler {olive}{2}{default}: {blue}{3}"
 		"pt"		"ID {1} do jogador {olive}{2}{default}: {blue}{3}"
 		"chi"		"玩家 {olive}{2} {default}的 {1} ID 是：{blue}{3}"
+		"pl"		"ID {1} gracza {olive}{2}{default}: {blue}{3}"
+		"tr"		"{olive}{2}{default} oyuncusunun {1} ID'si: {blue}{3}"
+		"it"		"ID {1} del giocatore {olive}{2}{default}: {blue}{3}"
+		"ua"		"{1} ID гравця {olive}{2}{default}: {blue}{3}"
+		"zho"		"玩家 {olive}{2} {default}的 {1} ID 是：{blue}{3}"
+		"cze"		"{1} ID hráče {olive}{2}{default}: {blue}{3}"
 	}
 	"Kick Not Authenticated"
 	{
@@ -51,5 +75,11 @@
 		"de"		"Verbindungsversuch mit einer legitimen Steam ID ohne Steam-Authentifizierung."
 		"pt"		"Tentativa de entrar com um Steam ID legítimo sem estar autenticado na Steam."
 		"chi"		"试图在未通过 Steam 验证的情况下使用合法的 Steam ID 加入。"
+		"pl"		"Próba dołączenia z prawidłowym Steam ID bez uwierzytelnienia w Steam."
+		"tr"		"Steam ile doğrulanmadan geçerli bir Steam ID ile katılmaya çalışıldı."
+		"it"		"Tentativo di accesso con uno Steam ID legittimo senza essere autenticati su Steam."
+		"ua"		"Спроба підключитися з дійсним Steam ID без автентифікації в Steam."
+		"zho"		"嘗試使用合法的 Steam ID 加入，但未通過 Steam 驗證。"
+		"cze"		"Pokus o připojení s platným Steam ID bez ověření přes Steam."
 	}
 }
